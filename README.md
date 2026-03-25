@@ -1,6 +1,6 @@
 # policy-inference-spec
 
-Shared Python package for **Pi-compatible** policy inference over WebSocket: msgpack frames, numpy tagging, and strict validation of wire keys/shapes.
+Shared Python package for policy inference over WebSocket: msgpack frames, numpy tagging, and strict validation of wire keys/shapes.
 
 ## Install
 
@@ -10,15 +10,12 @@ From a checkout of this repo:
 pip install -e .
 ```
 
-In the Ultra monorepo this is installed as an editable path dependency (`libs/submodules/policy-inference-spec`).
+## Wire protocol
 
-## Wire protocol (implemented)
-
-This matches the behavior described in the Physical Intelligence gateway docs for the core path:
 
 - **Transport:** WebSocket, binary frames, **msgpack** payloads.
 - **Handshake:** client connects to `wss://<host>/ws` (or `ws://`). The server sends the **first** message: a **ServerConfig** dict (camera names, image resolution, action space, etc.).
-- **Auth:** clients that need an API key send header **`x-api-key`** (Ultra maps station config `POLICY_AUTH_TOKEN` to this header).
+- **Auth:** clients that need an API key send header **`x-api-key`**.
 - **NumPy:** arrays are encoded with a **`__ndarray__`** tag: `data` (bytes), `dtype`, `shape` (see `policy_inference_spec.protocol`).
 - **Inference request** (msgpack dict): at minimum
   - `observation/joint_position` — float32 joint vector **1-D** length 60 (gen1) or 89 (gen2)
@@ -31,11 +28,10 @@ This matches the behavior described in the Physical Intelligence gateway docs fo
 
 Strict validation helpers live in `policy_inference_spec.schema` (`validate_wire_inference_request_frame`, `validate_wire_inference_response`).
 
-Dora builds the exact wire frame (including JPEG encoding and tensor layout) in `dora/nodes/ai/remote_policy_wire.py` and adapters; the inference server decodes in `servers/inference/ws_wire.py`.
-
-## Optional Pi features not implemented here
+## Features to be added in future
 
 - **H.264 / `__video_frame__`** streaming frames. This package handles **JPEG bytes** and **raw uint8 ndarray** images for `observation/*` keys.
+- **Real Time Chunking** support whereby action prefixes can be sent in the inference request
 
 ## Package layout
 
