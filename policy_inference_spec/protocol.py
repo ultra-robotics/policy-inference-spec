@@ -20,6 +20,19 @@ class NdarrayField(msgspec.Struct):
     codec: str = "raw"
 
 
+def _resize_hwc_uint8(img: npt.NDArray[np.uint8], height: int, width: int) -> npt.NDArray[np.uint8]:
+    h, w = img.shape[:2]
+    if (h, w) == (height, width):
+        return img
+    resize = getattr(cv2, "resize", None)
+    inter_area = getattr(cv2, "INTER_AREA", 1)
+    if resize is not None:
+        return np.ascontiguousarray(resize(img, (width, height), interpolation=inter_area)).astype(np.uint8, copy=False)
+    y_idx = np.linspace(0, h - 1, height, dtype=np.intp)
+    x_idx = np.linspace(0, w - 1, width, dtype=np.intp)
+    return np.ascontiguousarray(img[y_idx[:, None], x_idx[None, :]]).astype(np.uint8, copy=False)
+
+
 def _chw_to_hwc(arr: npt.NDArray[Any]) -> npt.NDArray[np.uint8]:
     if arr.ndim == 4:
         assert arr.shape[0] == 1, f"JPEG transport only supports batch size 1, got shape {arr.shape}"
@@ -36,9 +49,7 @@ def _hwc_to_chw(img: npt.NDArray[np.uint8], shape: tuple[int, ...]) -> npt.NDArr
     assert len(target_shape) == 3, f"JPEG transport expects CHW target shape, got {shape}"
     target_h, target_w = target_shape[1], target_shape[2]
     if img.shape[:2] != (target_h, target_w):
-        img = np.ascontiguousarray(cv2.resize(img, (target_w, target_h), interpolation=cv2.INTER_AREA)).astype(
-            np.uint8, copy=False
-        )
+        img = _resize_hwc_uint8(img, target_h, target_w)
     chw = np.ascontiguousarray(img.transpose(2, 0, 1))
     if len(shape) == 4:
         return chw[None]
@@ -58,9 +69,7 @@ def encode_ndarray(arr: npt.NDArray[Any], jpeg_quality: int | None = None, image
         assert image_scale > 0, f"image_scale must be positive, got {image_scale}"
         scaled_w = max(1, int(round(img.shape[1] * image_scale)))
         scaled_h = max(1, int(round(img.shape[0] * image_scale)))
-        img = np.ascontiguousarray(cv2.resize(img, (scaled_w, scaled_h), interpolation=cv2.INTER_AREA)).astype(
-            np.uint8, copy=False
-        )
+        img = _resize_hwc_uint8(img, scaled_h, scaled_w)
 
     return NdarrayField(
         data=simplejpeg.encode_jpeg(img, quality=jpeg_quality),

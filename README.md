@@ -1,6 +1,6 @@
 # policy-inference-spec
 
-Shared Python package for **Pi-compatible** policy inference over WebSocket: msgpack frames, numpy tagging, and Ultra’s field mapping to gateway camera names.
+Shared Python package for **Pi-compatible** policy inference over WebSocket: msgpack frames, numpy tagging, and strict validation of wire keys/shapes.
 
 ## Install
 
@@ -21,14 +21,17 @@ This matches the behavior described in the Physical Intelligence gateway docs fo
 - **Auth:** clients that need an API key send header **`x-api-key`** (Ultra maps station config `POLICY_AUTH_TOKEN` to this header).
 - **NumPy:** arrays are encoded with a **`__ndarray__`** tag: `data` (bytes), `dtype`, `shape` (see `policy_inference_spec.protocol`).
 - **Inference request** (msgpack dict): at minimum
-  - `observation/joint_position` — float32 joint vector (1-D or squeezed batch)
-  - `observation/<camera_name>` — JPEG **bytes** or raw image payload (see `encode_ndarray` / `chw_from_wire_image`)
-  - `prompt` — single language string for the policy (no separate metadata dict on the wire)
-  - **`hardware_model`** (optional) — `"gen1"` or `"gen2"`; **omit** for default **`gen2`** tensor layout
-  - **`model_id`** (optional) — which policy/checkpoint the server should run  
-  **`RemotePolicyClient.predict(raw_sample, prompt, ...)`** takes that string as-is; call sites (e.g. Dora `run_policy_remote`) build it from domain fields before calling.
-- **Inference response:** `actions` (ndarray), `inference_time` (server-side ms, optional), and Ultra adds **`policy_id`**.
+  - `observation/joint_position` — float32 joint vector **1-D** length 60 (gen1) or 89 (gen2)
+  - `observation/<camera_name>` — JPEG **bytes** (encoded with `encode_ndarray` / decoded with `chw_from_wire_image`)
+  - `prompt` — single language string for the policy
+  - `model_id` — policy id string (may be empty)
+  - **`hardware_model`** — required for **gen1** (`"gen1"`); **omit** for default **gen2** layout
+- **Inference response:** `actions` (2-D ndarray; second dim **22** for gen1-style policies or **25** for gen2), `inference_time` (server-side ms), and **`policy_id`** (string).
 - **Control:** `{"endpoint": "reset"}` → `{"status": "ok"}`; `{"endpoint": "telemetry", ...}` → `{"status": "ok"}`.
+
+Strict validation helpers live in `policy_inference_spec.schema` (`validate_wire_inference_request_frame`, `validate_wire_inference_response`).
+
+Dora builds the exact wire frame (including JPEG encoding and tensor layout) in `dora/nodes/ai/remote_policy_wire.py` and adapters; the inference server decodes in `servers/inference/ws_wire.py`.
 
 ## Optional Pi features not implemented here
 
@@ -39,8 +42,8 @@ This matches the behavior described in the Physical Intelligence gateway docs fo
 | Module | Role |
 |--------|------|
 | `protocol.py` | msgpack encode/decode, `__ndarray__`, `NdarrayField`, JPEG/raw image helpers |
-| `wire.py` | Gateway key names, Ultra tensor shapes ↔ `observation/<camera>_left` mapping, `server_config_for_hardware_model` |
-| `client.py` | `RemotePolicyClient` (async), `policy_ws_url`, warmup |
+| `schema.py` | Wire key constants, per-generation shapes, strict request/response validation |
+| `client.py` | `RemotePolicyClient` (async transport + validation), `policy_ws_url`, warmup |
 | `constants.py` | Default inference port |
 
 ## License
