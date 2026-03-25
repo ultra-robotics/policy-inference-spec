@@ -1,0 +1,9 @@
+# Run from repo root: `just -f libs/submodules/policy-inference-spec/policy_inference_spec/Justfile test`
+# Or: `cd libs/submodules/policy-inference-spec/policy_inference_spec && just test`
+
+test:
+    cd "{{justfile_directory()}}/.." && uv run --extra dev pytest tests/ -q
+
+# Warmup + predict smoke test (e.g. `just smoke --url ws://127.0.0.1:8765/ws --predicts 3`)
+smoke *args:
+    cd "{{justfile_directory()}}/.." && uv run python -m policy_inference_spec.smoke {{args}}
