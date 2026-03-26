@@ -16,6 +16,7 @@ from policy_inference_spec.client_helpers import (
     _log_server_config,
     _random_warmup_wire_frame,
     _server_image_resolution,
+    _summarize_server_payload,
     _summarize_wire_frame,
     _wire_camera_names,
     policy_ws_url,
@@ -169,7 +170,11 @@ class RemotePolicyClient:
         result = msgpack_decode(response_raw)
         _emit_server_error_verbatim(result)
         assert isinstance(result, dict), f"unexpected response type {type(result)}"
-        validate_wire_inference_response(result)
+        try:
+            validate_wire_inference_response(result)
+        except AssertionError as exc:
+            LOGGER.error("Malformed inference response: %s", _summarize_server_payload(result))
+            raise AssertionError(f"{exc}") from exc
         actions = result[KEY_ACTIONS]
         infer_raw = result.get(KEY_INFERENCE_TIME)
         server_latency_ms = float(infer_raw) if infer_raw is not None else 0.0

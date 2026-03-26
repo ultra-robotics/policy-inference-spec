@@ -42,6 +42,31 @@ def _observation_keys_for_gen() -> list[str]:
     return [f"observation/{cam}" for cam in GEN2_GATEWAY_CAMERAS]
 
 
+def _summarize_response_value(value: Any) -> str:
+    if isinstance(value, np.ndarray):
+        return f"ndarray(shape={value.shape}, dtype={value.dtype})"
+    if isinstance(value, dict):
+        return f"dict(keys={sorted(str(key) for key in value)})"
+    if isinstance(value, list):
+        return f"list(len={len(value)})"
+    return type(value).__name__
+
+
+def _summarize_response_payload(result: dict[str, Any]) -> str:
+    parts = [f"{key}={_summarize_response_value(value)}" for key, value in sorted(result.items(), key=lambda item: str(item[0]))]
+    return ", ".join(parts)
+
+
+def wire_joint_position_array(value: Any, hardware_model: str | HardwareModel) -> npt.NDArray[np.float32]:
+    hm = assert_supported_hardware_model(hardware_model)
+    assert isinstance(value, list), f"{KEY_OBS_JOINT_POSITION} must be list"
+    joint = np.asarray(value, dtype=np.float32)
+    assert joint.ndim == 1, f"{KEY_OBS_JOINT_POSITION} must be 1-D, got shape {joint.shape}"
+    expected_dim = GEN1_STATE_DIM if hm == HardwareModel.GEN1 else GEN2_STATE_DIM
+    assert joint.shape == (expected_dim,), f"{KEY_OBS_JOINT_POSITION} must be ({expected_dim},), got {joint.shape}"
+    return joint
+
+
 def wire_inference_request_keys(*, hardware_model: HardwareModel) -> frozenset[str]:
     base = frozenset(
         {
@@ -100,12 +125,7 @@ def validate_wire_inference_request_frame(frame: dict[str, Any]) -> HardwareMode
     assert isinstance(frame[KEY_MODEL_ID], str), f"{KEY_MODEL_ID} must be str"
     if hardware_model == HardwareModel.GEN1:
         assert frame[KEY_HARDWARE_MODEL] == HardwareModel.GEN1.value, "gen1 wire frame must set hardware_model to gen1"
-    joint = frame[KEY_OBS_JOINT_POSITION]
-    assert isinstance(joint, np.ndarray), f"{KEY_OBS_JOINT_POSITION} must be ndarray"
-    assert joint.ndim == 1, f"{KEY_OBS_JOINT_POSITION} must be 1-D, got shape {joint.shape}"
-    expected_dim = GEN1_STATE_DIM if hardware_model == HardwareModel.GEN1 else GEN2_STATE_DIM
-    assert joint.shape == (expected_dim,), f"{KEY_OBS_JOINT_POSITION} must be ({expected_dim},), got {joint.shape}"
-    assert joint.dtype == np.float32, f"{KEY_OBS_JOINT_POSITION} must be float32, got {joint.dtype}"
+    _ = wire_joint_position_array(frame[KEY_OBS_JOINT_POSITION], hardware_model)
     for k in _observation_keys_for_gen():
         v = frame[k]
         assert isinstance(v, (bytes, np.ndarray)), f"{k} must be jpeg bytes or ndarray, got {type(v)}"
@@ -114,12 +134,15 @@ def validate_wire_inference_request_frame(frame: dict[str, Any]) -> HardwareMode
 
 def validate_wire_inference_response(result: dict[str, Any]) -> None:
     assert isinstance(result, dict), f"response must be dict, got {type(result)}"
-    assert "error" not in result, f"unexpected error payload: {result}"
+    response_summary = _summarize_response_payload(result)
+    assert "error" not in result, f"unexpected error payload: {response_summary}"
     allowed = frozenset({KEY_ACTIONS, KEY_INFERENCE_TIME, "policy_id"})
-    assert set(result.keys()) <= allowed, f"response keys {set(result.keys())} not subset of {allowed}"
-    assert KEY_ACTIONS in result, "response missing actions"
+    assert set(result.keys()) <= allowed, f"response keys {set(result.keys())} not subset of {allowed}; summary={response_summary}"
+    assert KEY_ACTIONS in result, f"response missing actions; summary={response_summary}"
     actions = result[KEY_ACTIONS]
-    assert isinstance(actions, np.ndarray), f"actions must be ndarray, got {type(actions)}"
+    assert isinstance(actions, np.ndarray), (
+        f"actions must be ndarray, got {type(actions)}; summary={response_summary}"
+    )
     assert actions.ndim == 2, f"actions must be 2-D, got shape {actions.shape}"
     assert actions.shape[1] in WIRE_ACTION_DIMS_ALLOWED, (
         f"actions second dim must be one of {sorted(WIRE_ACTION_DIMS_ALLOWED)}, got {actions.shape}"
@@ -155,5 +178,6 @@ __all__ = [
     "validate_ultra_arrays_for_hardware_model",
     "validate_wire_inference_request_frame",
     "validate_wire_inference_response",
+    "wire_joint_position_array",
     "wire_inference_request_keys",
 ]

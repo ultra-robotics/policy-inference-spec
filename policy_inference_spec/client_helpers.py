@@ -68,12 +68,20 @@ def _summarize_wire_frame(wire_frame: dict[str, Any]) -> dict[str, str]:
     return {key: _truncate_log_value(wire_frame[key]) for key in sorted(wire_frame.keys())}
 
 
+def _summarize_server_payload(payload: Any) -> Any:
+    if isinstance(payload, dict):
+        return {str(key): _summarize_server_payload(value) for key, value in sorted(payload.items(), key=lambda item: str(item[0]))}
+    if isinstance(payload, list):
+        return f"list(len={len(payload)})"
+    return _truncate_log_value(payload)
+
+
 def _emit_server_error_verbatim(payload: Any) -> None:
     if isinstance(payload, str):
-        print(payload, file=sys.stderr, flush=True)
+        print(_truncate_log_value(payload, max_chars=400), file=sys.stderr, flush=True)
         return
     if isinstance(payload, dict) and "error" in payload:
-        print(str(payload["error"]), file=sys.stderr, flush=True)
+        print(_truncate_log_value(payload["error"], max_chars=400), file=sys.stderr, flush=True)
 
 
 def _server_image_resolution(server_config: dict[str, Any] | None) -> tuple[int, int] | None:
@@ -105,7 +113,7 @@ def _random_warmup_wire_frame(
     if hardware_model == HardwareModel.GEN1:
         joint = rng.standard_normal(GEN1_STATE_DIM, dtype=np.float32)
         frame: dict[str, Any] = {
-            KEY_OBS_JOINT_POSITION: joint,
+            KEY_OBS_JOINT_POSITION: joint.tolist(),
             KEY_PROMPT: "",
             KEY_MODEL_ID: "",
             KEY_HARDWARE_MODEL: HardwareModel.GEN1.value,
@@ -115,7 +123,7 @@ def _random_warmup_wire_frame(
     else:
         joint = rng.standard_normal(GEN2_STATE_DIM, dtype=np.float32)
         frame: dict[str, Any] = {
-            KEY_OBS_JOINT_POSITION: joint,
+            KEY_OBS_JOINT_POSITION: joint.tolist(),
             KEY_PROMPT: "",
             KEY_MODEL_ID: "",
         }

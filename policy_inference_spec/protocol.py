@@ -100,21 +100,22 @@ def chw_from_wire_image(val: Any, target_shape: tuple[int, ...]) -> npt.NDArray[
 
 def ndarray_to_msgpack_tag(arr: npt.NDArray[Any]) -> dict[str, Any]:
     return {
-        NDARRAY_MSGPACK_TAG: {
-            "data": arr.tobytes(),
-            "dtype": str(arr.dtype),
-            "shape": list(arr.shape),
-        }
+        NDARRAY_MSGPACK_TAG: True,
+        "data": arr.tobytes(),
+        "dtype": str(arr.dtype),
+        "shape": list(arr.shape),
     }
 
 
 def ndarray_from_msgpack_tag(obj: Any) -> npt.NDArray[Any]:
     assert isinstance(obj, dict), f"expected ndarray tag dict, got {type(obj)}"
-    inner = obj.get(NDARRAY_MSGPACK_TAG)
-    assert isinstance(inner, dict), f"invalid ndarray tag: {obj!r}"
-    data = inner["data"]
-    dtype = np.dtype(inner["dtype"])
-    shape = tuple(inner["shape"])
+    tag = obj.get(NDARRAY_MSGPACK_TAG)
+    if tag is None:
+        tag = obj.get(NDARRAY_MSGPACK_TAG.encode())
+    assert tag is True, f"invalid ndarray tag keys={sorted(repr(key) for key in obj)}"
+    data = obj["data"] if "data" in obj else obj[b"data"]
+    dtype = np.dtype(obj["dtype"] if "dtype" in obj else obj[b"dtype"])
+    shape = tuple(obj["shape"] if "shape" in obj else obj[b"shape"])
     return np.frombuffer(data, dtype=dtype).reshape(shape)
 
 
@@ -131,9 +132,20 @@ def msgpack_encode(obj: Any) -> bytes:
 
 def _walk_decode(obj: Any) -> Any:
     if isinstance(obj, dict):
-        if NDARRAY_MSGPACK_TAG in obj and isinstance(obj[NDARRAY_MSGPACK_TAG], dict):
+        if (
+            NDARRAY_MSGPACK_TAG in obj
+            or NDARRAY_MSGPACK_TAG.encode() in obj
+        ):
             return ndarray_from_msgpack_tag(obj)
-        return {k: _walk_decode(v) for k, v in obj.items()}
+        normalized: dict[Any, Any] = {}
+        for key, value in obj.items():
+            if isinstance(key, bytes):
+                try:
+                    key = key.decode()
+                except UnicodeDecodeError:
+                    pass
+            normalized[key] = _walk_decode(value)
+        return normalized
     if isinstance(obj, list):
         return [_walk_decode(x) for x in obj]
     return obj
