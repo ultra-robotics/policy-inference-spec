@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
+from typing import Any
 
 import numpy as np
 import pytest
@@ -26,13 +27,13 @@ def _minimal_jpeg() -> bytes:
     return simplejpeg.encode_jpeg(np.zeros((16, 16, 3), dtype=np.uint8), quality=75)
 
 
-def _valid_gen2_wire_frame() -> dict[str, object]:
+def _valid_gen2_wire_frame() -> dict[str, Any]:
     jpeg = _minimal_jpeg()
     frame = {
         KEY_OBS_JOINT_POSITION: np.zeros(89, dtype=np.float32),
-        "observation/main_image_left": jpeg,
-        "observation/left_wrist_image_left": jpeg,
-        "observation/right_wrist_image_left": jpeg,
+        "observation/images/main_image_left": jpeg,
+        "observation/images/left_wrist_image_left": jpeg,
+        "observation/images/right_wrist_image_left": jpeg,
         KEY_PROMPT: "test",
         KEY_MODEL_ID: "",
     }
@@ -64,7 +65,7 @@ def test_default_predict_url_is_ws() -> None:
 
 @pytest.mark.asyncio
 async def test_predict_round_trip_with_mock_websocket() -> None:
-    cfg = msgpack_encode({"camera_names": ["main_image_left"]})
+    cfg = msgpack_encode({"camera_names": ["images/main_image_left"]})
     actions = np.zeros((4, 25), dtype=np.float32)
     resp = msgpack_encode(
         {
