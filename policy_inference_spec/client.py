@@ -17,7 +17,6 @@ from policy_inference_spec.client_helpers import (
     _random_warmup_wire_frame,
     _server_image_resolution,
     _summarize_server_payload,
-    _summarize_wire_frame,
     _wire_camera_names,
     policy_ws_url,
 )
@@ -115,7 +114,6 @@ class RemotePolicyClient:
                 _log_server_config(server_config)
                 self._server_config = server_config
                 wire_frame = _random_warmup_wire_frame(hm, image_resolution=_server_image_resolution(server_config))
-                LOGGER.info("Sending warmup inference frame: %s", _summarize_wire_frame(wire_frame))
                 ws.send(msgpack_encode(wire_frame))
                 response_raw = ws.recv()
                 if isinstance(response_raw, bytes):
@@ -155,7 +153,6 @@ class RemotePolicyClient:
         assert self._ws is not None
         wire_frame = self._adapt_wire_frame_to_server_config(wire_frame)
         validate_wire_inference_request_frame(wire_frame)
-        LOGGER.info("Sending inference frame keys: %s", sorted(wire_frame.keys()))
         self._warn_on_camera_name_mismatch(wire_frame)
         payload = msgpack_encode(wire_frame)
         start_time_ns = time.time_ns()
@@ -179,14 +176,6 @@ class RemotePolicyClient:
         infer_raw = result.get(KEY_INFERENCE_TIME)
         server_latency_ms = float(infer_raw) if infer_raw is not None else 0.0
         policy_id_used = str(result.get("policy_id", ""))
-
-        network_latency_ms = total_latency_ms - server_latency_ms
-        LOGGER.info(
-            "Inference latency: %.1fms (server) + %.1fms (network) = %.1fms (total)",
-            server_latency_ms,
-            network_latency_ms,
-            total_latency_ms,
-        )
 
         actions_d = np.array(actions, dtype=np.float32)
         return RemotePolicyPrediction(

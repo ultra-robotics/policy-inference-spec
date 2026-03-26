@@ -113,7 +113,7 @@ def _random_warmup_wire_frame(
     if hardware_model == HardwareModel.GEN1:
         joint = rng.standard_normal(GEN1_STATE_DIM, dtype=np.float32)
         frame: dict[str, Any] = {
-            KEY_OBS_JOINT_POSITION: joint.tolist(),
+            KEY_OBS_JOINT_POSITION: joint,
             KEY_PROMPT: "",
             KEY_MODEL_ID: "",
             KEY_HARDWARE_MODEL: HardwareModel.GEN1.value,
@@ -123,7 +123,7 @@ def _random_warmup_wire_frame(
     else:
         joint = rng.standard_normal(GEN2_STATE_DIM, dtype=np.float32)
         frame: dict[str, Any] = {
-            KEY_OBS_JOINT_POSITION: joint.tolist(),
+            KEY_OBS_JOINT_POSITION: joint,
             KEY_PROMPT: "",
             KEY_MODEL_ID: "",
         }

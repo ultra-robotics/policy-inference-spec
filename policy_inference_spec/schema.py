@@ -59,7 +59,7 @@ def _summarize_response_payload(result: dict[str, Any]) -> str:
 
 def wire_joint_position_array(value: Any, hardware_model: str | HardwareModel) -> npt.NDArray[np.float32]:
     hm = assert_supported_hardware_model(hardware_model)
-    assert isinstance(value, list), f"{KEY_OBS_JOINT_POSITION} must be list"
+    assert isinstance(value, np.ndarray), f"{KEY_OBS_JOINT_POSITION} must be ndarray"
     joint = np.asarray(value, dtype=np.float32)
     assert joint.ndim == 1, f"{KEY_OBS_JOINT_POSITION} must be 1-D, got shape {joint.shape}"
     expected_dim = GEN1_STATE_DIM if hm == HardwareModel.GEN1 else GEN2_STATE_DIM
