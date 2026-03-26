@@ -13,7 +13,6 @@ from policy_inference_spec.schema import (
     ENDPOINT_RESET,
     ENDPOINT_TELEMETRY,
     GEN2_GATEWAY_CAMERAS,
-    GEN2_SHAPES,
     KEY_ACTIONS,
     KEY_ENDPOINT,
     KEY_INFERENCE_TIME,
@@ -25,13 +24,13 @@ from policy_inference_spec.schema import (
 
 DEFAULT_ACTION_HORIZON = 4
 EXAMPLE_POLICY_ID = "example-dummy"
+EXAMPLE_IMAGE_RESOLUTION = (360, 640)
 
 
 def server_handshake_config() -> dict[str, Any]:
-    h, w = int(GEN2_SHAPES["observation.images.head"][2]), int(GEN2_SHAPES["observation.images.head"][3])
     return {
         "camera_names": list(GEN2_GATEWAY_CAMERAS),
-        "image_resolution": (h, w),
+        "image_resolution": EXAMPLE_IMAGE_RESOLUTION,
         "action_space": "joint_position",
         "needs_wrist_camera": True,
         "n_external_cameras": 1,

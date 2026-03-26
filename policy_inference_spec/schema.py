@@ -17,35 +17,21 @@ ENDPOINT_RESET = "reset"
 ENDPOINT_TELEMETRY = "telemetry"
 KEY_MODEL_ID = "model_id"
 
-GEN2_GATEWAY_CAMERAS = ["main_image_left", "left_wrist_image_left", "right_wrist_image_left"]
+GEN2_GATEWAY_CAMERAS = ["images/main_image_left", "images/left_wrist_image_left", "images/right_wrist_image_left"]
 GEN2_ULTRA_TO_GATEWAY_IMAGE = {
-    "observation.images.head": "main_image_left",
-    "observation.images.left_wrist": "left_wrist_image_left",
-    "observation.images.right_wrist": "right_wrist_image_left",
+    "observation.images.head": "images/main_image_left",
+    "observation.images.left_wrist": "images/left_wrist_image_left",
+    "observation.images.right_wrist": "images/right_wrist_image_left",
 }
 GEN2_GATEWAY_TO_ULTRA_IMAGE = {v: k for k, v in GEN2_ULTRA_TO_GATEWAY_IMAGE.items()}
 
-GEN1_GATEWAY_CAMERAS = ["main_image_left", "left_wrist_image_left", "right_wrist_image_left"]
+GEN1_GATEWAY_CAMERAS = ["images/main_image_left", "images/left_wrist_image_left", "images/right_wrist_image_left"]
 GEN1_ULTRA_TO_GATEWAY_IMAGE = {
-    "main_image": "main_image_left",
-    "left_wrist_image": "left_wrist_image_left",
-    "right_wrist_image": "right_wrist_image_left",
+    "main_image": "images/main_image_left",
+    "left_wrist_image": "images/left_wrist_image_left",
+    "right_wrist_image": "images/right_wrist_image_left",
 }
 GEN1_GATEWAY_TO_ULTRA_IMAGE = {v: k for k, v in GEN1_ULTRA_TO_GATEWAY_IMAGE.items()}
-
-GEN1_SHAPES: dict[str, tuple[int, ...]] = {
-    "observation.state": (1, 60),
-    "main_image": (1, 3, 360, 1280),
-    "left_wrist_image": (1, 3, 360, 1280),
-    "right_wrist_image": (1, 3, 360, 1280),
-}
-
-GEN2_SHAPES: dict[str, tuple[int, ...]] = {
-    "observation.state": (1, 89),
-    "observation.images.head": (1, 3, 360, 640),
-    "observation.images.left_wrist": (1, 3, 300, 480),
-    "observation.images.right_wrist": (1, 3, 300, 480),
-}
 
 GEN1_STATE_DIM = 60
 GEN2_STATE_DIM = 89
@@ -80,12 +66,23 @@ def validate_ultra_arrays_for_hardware_model(
     hardware_model: str | HardwareModel,
 ) -> None:
     hm = assert_supported_hardware_model(hardware_model)
-    shapes = GEN1_SHAPES if hm == HardwareModel.GEN1 else GEN2_SHAPES
+    image_keys = set(GEN1_ULTRA_TO_GATEWAY_IMAGE) if hm == HardwareModel.GEN1 else set(GEN2_ULTRA_TO_GATEWAY_IMAGE)
     keys = set(arrays.keys())
-    expected = set(shapes.keys())
+    expected = {"observation.state", *image_keys}
     assert keys == expected, f"{hm.value} request keys {keys} != expected {expected}"
-    for k, shape in shapes.items():
-        assert arrays[k].shape == shape, f"{hm.value} array {k} shape {arrays[k].shape} != {shape}"
+    state = arrays["observation.state"]
+    expected_state_shape = (1, GEN1_STATE_DIM) if hm == HardwareModel.GEN1 else (1, GEN2_STATE_DIM)
+    assert state.shape == expected_state_shape, (
+        f"{hm.value} observation.state shape {state.shape} != {expected_state_shape}"
+    )
+    for key in image_keys:
+        image = arrays[key]
+        assert image.ndim in (3, 4), f"{hm.value} image {key} must be CHW or BCHW, got {image.shape}"
+        if image.ndim == 4:
+            assert image.shape[0] == 1, f"{hm.value} image {key} batch size must be 1, got {image.shape}"
+            assert image.shape[1] == 3, f"{hm.value} image {key} channel dim must be 3, got {image.shape}"
+            continue
+        assert image.shape[0] == 3, f"{hm.value} image {key} channel dim must be 3, got {image.shape}"
 
 
 def validate_wire_inference_request_frame(frame: dict[str, Any]) -> HardwareModel:
@@ -140,12 +137,10 @@ __all__ = [
     "ENDPOINT_TELEMETRY",
     "GEN1_GATEWAY_CAMERAS",
     "GEN1_GATEWAY_TO_ULTRA_IMAGE",
-    "GEN1_SHAPES",
     "GEN1_ULTRA_TO_GATEWAY_IMAGE",
     "GEN1_STATE_DIM",
     "GEN2_GATEWAY_CAMERAS",
     "GEN2_GATEWAY_TO_ULTRA_IMAGE",
-    "GEN2_SHAPES",
     "GEN2_STATE_DIM",
     "as_hardware_model",
     "KEY_ACTIONS",

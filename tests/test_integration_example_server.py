@@ -5,7 +5,7 @@ import pytest
 
 from policy_inference_spec.client import RemotePolicyClient, _random_warmup_wire_frame
 from policy_inference_spec.hardware_model import HardwareModel
-from server.minimal import EXAMPLE_POLICY_ID, run_example_server, structured_dummy_actions
+from server.minimal import EXAMPLE_POLICY_ID, run_example_server, server_handshake_config, structured_dummy_actions
 
 pytestmark = pytest.mark.asyncio
 
@@ -16,6 +16,10 @@ async def test_client_predict_against_example_server_gen2() -> None:
         frame = _random_warmup_wire_frame(HardwareModel.GEN2)
         async with client:
             pred = await client.predict(frame)
+            assert client._server_config == {
+                **server_handshake_config(),
+                "image_resolution": [360, 640],
+            }
 
     expected = structured_dummy_actions()
     assert pred.actions_d.shape == expected.shape

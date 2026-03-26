@@ -4,77 +4,33 @@ import logging
 import time
 from dataclasses import dataclass
 from typing import Any
-from urllib.parse import urlparse
 
 import numpy as np
 import numpy.typing as npt
-import simplejpeg
 import websockets
 from websockets.sync.client import connect as ws_connect_sync
 
-from policy_inference_spec.constants import DEFAULT_INFERENCE_SERVER_PORT
+from policy_inference_spec.client_helpers import (
+    DEFAULT_PREDICT_URL,
+    _emit_server_error_verbatim,
+    _log_server_config,
+    _random_warmup_wire_frame,
+    _server_image_resolution,
+    _summarize_wire_frame,
+    _wire_camera_names,
+    policy_ws_url,
+)
 from policy_inference_spec.hardware_model import HardwareModel, as_hardware_model
-from policy_inference_spec.protocol import msgpack_decode, msgpack_encode
+from policy_inference_spec.protocol import chw_from_wire_image, encode_ndarray, msgpack_decode, msgpack_encode
 from policy_inference_spec.schema import (
-    GEN1_GATEWAY_CAMERAS,
-    GEN1_SHAPES,
-    GEN1_STATE_DIM,
-    GEN2_SHAPES,
-    GEN2_STATE_DIM,
-    GEN2_ULTRA_TO_GATEWAY_IMAGE,
     KEY_ACTIONS,
-    KEY_HARDWARE_MODEL,
     KEY_INFERENCE_TIME,
-    KEY_MODEL_ID,
     KEY_OBS_JOINT_POSITION,
-    KEY_PROMPT,
     validate_wire_inference_request_frame,
     validate_wire_inference_response,
 )
 
 LOGGER = logging.getLogger(__name__)
-DEFAULT_PREDICT_URL = f"ws://inf.ultra.tech:{DEFAULT_INFERENCE_SERVER_PORT}/ws"
-
-
-def policy_ws_url(url: str) -> str:
-    u = url.strip()
-    parsed = urlparse(u)
-    assert parsed.scheme in ("ws", "wss"), f"POLICY_SERVER_URL must be ws:// or wss://, got {url!r}"
-    return u
-
-
-def _random_jpeg_bytes(rng: np.random.Generator, h: int, w: int) -> bytes:
-    rgb = rng.integers(0, 256, size=(h, w, 3), dtype=np.uint8)
-    return simplejpeg.encode_jpeg(rgb, quality=75)
-
-
-def _random_warmup_wire_frame(hardware_model: HardwareModel) -> dict[str, Any]:
-    rng = np.random.default_rng()
-    if hardware_model == HardwareModel.GEN1:
-        joint = rng.standard_normal(GEN1_STATE_DIM, dtype=np.float32)
-        h = int(GEN1_SHAPES["main_image"][2])
-        w = int(GEN1_SHAPES["main_image"][3])
-        frame: dict[str, Any] = {
-            KEY_OBS_JOINT_POSITION: joint,
-            KEY_PROMPT: "",
-            KEY_MODEL_ID: "",
-            KEY_HARDWARE_MODEL: HardwareModel.GEN1.value,
-        }
-        for cam in GEN1_GATEWAY_CAMERAS:
-            frame[f"observation/{cam}"] = _random_jpeg_bytes(rng, h, w)
-    else:
-        joint = rng.standard_normal(GEN2_STATE_DIM, dtype=np.float32)
-        frame: dict[str, Any] = {
-            KEY_OBS_JOINT_POSITION: joint,
-            KEY_PROMPT: "",
-            KEY_MODEL_ID: "",
-        }
-        for ultra_key, cam in GEN2_ULTRA_TO_GATEWAY_IMAGE.items():
-            sh = GEN2_SHAPES[ultra_key]
-            hh, ww = int(sh[2]), int(sh[3])
-            frame[f"observation/{cam}"] = _random_jpeg_bytes(rng, hh, ww)
-    validate_wire_inference_request_frame(frame)
-    return frame
 
 
 @dataclass(frozen=True)
@@ -91,7 +47,7 @@ class RemotePolicyClient:
         *,
         policy_auth_headers: dict[str, str] | None = None,
     ) -> None:
-        self.predict_url = predict_url
+        self.predict_url = policy_ws_url(predict_url)
         self._policy_auth_headers = policy_auth_headers or {}
         self._ws: Any = None
         self._server_config: dict[str, Any] | None = None
@@ -104,31 +60,68 @@ class RemotePolicyClient:
         await self.aclose()
 
     async def aclose(self) -> None:
-        if self._ws is not None:
-            await self._ws.close()
-            self._ws = None
-        self._server_config = None
-        self._connected_url = None
+        await self._close_ws()
 
     def update_connection(self, *, predict_url: str, policy_auth_headers: dict[str, str] | None = None) -> None:
-        self.predict_url = predict_url
+        self.predict_url = policy_ws_url(predict_url)
         self._policy_auth_headers = policy_auth_headers or {}
         self._connected_url = None
 
     def _headers(self) -> list[tuple[str, str]]:
         return [(k, v) for k, v in self._policy_auth_headers.items()]
 
+    def _warn_on_camera_name_mismatch(self, wire_frame: dict[str, Any]) -> None:
+        if self._server_config is None:
+            return
+        server_camera_names = self._server_config.get("camera_names")
+        if not isinstance(server_camera_names, list) or not all(isinstance(name, str) for name in server_camera_names):
+            return
+        sent_camera_names = _wire_camera_names(wire_frame)
+        missing_camera_names = sorted(name for name in sent_camera_names if name not in set(server_camera_names))
+        if missing_camera_names:
+            LOGGER.warning(
+                "Sending camera names not present in server config. sent=%s missing=%s server_camera_names=%s",
+                sent_camera_names,
+                missing_camera_names,
+                sorted(server_camera_names),
+            )
+
+    def _adapt_wire_frame_to_server_config(self, wire_frame: dict[str, Any]) -> dict[str, Any]:
+        image_resolution = _server_image_resolution(self._server_config)
+        if image_resolution is None:
+            return wire_frame
+
+        target_h, target_w = image_resolution
+        adapted = dict(wire_frame)
+        for key, value in wire_frame.items():
+            if not key.startswith("observation/") or key == KEY_OBS_JOINT_POSITION:
+                continue
+            chw = chw_from_wire_image(value, (3, target_h, target_w))
+            field = encode_ndarray(chw, jpeg_quality=75)
+            assert field.codec == "jpeg", f"{key} must use jpeg transport"
+            adapted[key] = field.data
+        return adapted
+
     def warmup(self, *, hardware_model: str | HardwareModel = HardwareModel.GEN2) -> bool:
         try:
             hm = as_hardware_model(hardware_model)
-            wire_frame = _random_warmup_wire_frame(hm)
-            uri = policy_ws_url(self.predict_url)
+            uri = self.predict_url
             with ws_connect_sync(uri, additional_headers=self._headers()) as ws:
                 first = ws.recv()
                 assert isinstance(first, bytes), type(first)
-                _ = msgpack_decode(first)
+                server_config = msgpack_decode(first)
+                assert isinstance(server_config, dict), "ServerConfig must be a dict"
+                _log_server_config(server_config)
+                self._server_config = server_config
+                wire_frame = _random_warmup_wire_frame(hm, image_resolution=_server_image_resolution(server_config))
+                LOGGER.info("Sending warmup inference frame: %s", _summarize_wire_frame(wire_frame))
                 ws.send(msgpack_encode(wire_frame))
-                ws.recv()
+                response_raw = ws.recv()
+                if isinstance(response_raw, bytes):
+                    response = msgpack_decode(response_raw)
+                    _emit_server_error_verbatim(response)
+                else:
+                    _emit_server_error_verbatim(response_raw)
             LOGGER.info("Inference server warmup complete")
             return True
         except Exception as exc:
@@ -136,7 +129,7 @@ class RemotePolicyClient:
             return False
 
     async def _ensure_ws(self) -> None:
-        uri = policy_ws_url(self.predict_url)
+        uri = self.predict_url
         if self._ws is not None and self._connected_url == uri:
             return
         if self._ws is not None:
@@ -147,6 +140,7 @@ class RemotePolicyClient:
         assert isinstance(first, bytes), type(first)
         self._server_config = msgpack_decode(first)
         assert isinstance(self._server_config, dict), "ServerConfig must be a dict"
+        _log_server_config(self._server_config)
 
     async def _close_ws(self) -> None:
         if self._ws is not None:
@@ -158,7 +152,10 @@ class RemotePolicyClient:
     async def predict(self, wire_frame: dict[str, Any]) -> RemotePolicyPrediction:
         await self._ensure_ws()
         assert self._ws is not None
+        wire_frame = self._adapt_wire_frame_to_server_config(wire_frame)
         validate_wire_inference_request_frame(wire_frame)
+        LOGGER.info("Sending inference frame keys: %s", sorted(wire_frame.keys()))
+        self._warn_on_camera_name_mismatch(wire_frame)
         payload = msgpack_encode(wire_frame)
         start_time_ns = time.time_ns()
         await self._ws.send(payload)
@@ -166,8 +163,11 @@ class RemotePolicyClient:
         end_time_ns = time.time_ns()
 
         total_latency_ms = (end_time_ns - start_time_ns) / 1e6
-        assert isinstance(response_raw, bytes), type(response_raw)
+        if isinstance(response_raw, str):
+            _emit_server_error_verbatim(response_raw)
+            raise AssertionError("unexpected text response from inference server")
         result = msgpack_decode(response_raw)
+        _emit_server_error_verbatim(result)
         assert isinstance(result, dict), f"unexpected response type {type(result)}"
         validate_wire_inference_response(result)
         actions = result[KEY_ACTIONS]
