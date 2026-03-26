@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator
 
 import numpy as np
+import torch
 import websockets
 from websockets.asyncio.server import ServerConnection
 
@@ -23,8 +24,25 @@ from policy_inference_spec.schema import (
 )
 
 DEFAULT_ACTION_HORIZON = 4
-EXAMPLE_POLICY_ID = "example-dummy"
+EXAMPLE_POLICY_ID = "example-linear"
 EXAMPLE_IMAGE_RESOLUTION = (360, 640)
+EXAMPLE_ACTION_DIM = 25
+
+
+class ExampleLinearPolicy(torch.nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.linear = torch.nn.Linear(89, EXAMPLE_ACTION_DIM)
+        with torch.no_grad():
+            weight = torch.arange(EXAMPLE_ACTION_DIM * 89, dtype=torch.float32).reshape(EXAMPLE_ACTION_DIM, 89)
+            self.linear.weight.copy_(weight / 1000.0)
+            self.linear.bias.copy_(torch.arange(EXAMPLE_ACTION_DIM, dtype=torch.float32) / 100.0)
+
+    def forward(self, joint_position: torch.Tensor) -> torch.Tensor:
+        return self.linear(joint_position)
+
+
+EXAMPLE_POLICY = ExampleLinearPolicy()
 
 
 def server_handshake_config() -> dict[str, Any]:
@@ -37,15 +55,22 @@ def server_handshake_config() -> dict[str, Any]:
     }
 
 
-def structured_dummy_actions(*, horizon: int = DEFAULT_ACTION_HORIZON) -> np.ndarray:
-    action_dim = 25
-    stripe = np.arange(action_dim, dtype=np.float32) % 3.0
-    time_axis = np.arange(horizon, dtype=np.float32)[:, None] * 10.0
-    return (time_axis + stripe[None, :]).astype(np.float32)
+def example_policy_actions(
+    joint_position: np.ndarray,
+    *,
+    horizon: int = DEFAULT_ACTION_HORIZON,
+) -> np.ndarray:
+    assert joint_position.shape == (89,), f"joint_position must have shape (89,), got {joint_position.shape}"
+    with torch.no_grad():
+        joint_tensor = torch.from_numpy(joint_position.astype(np.float32, copy=True))
+        action = EXAMPLE_POLICY(joint_tensor).cpu().numpy().astype(np.float32, copy=False)
+    return np.repeat(action[None, :], horizon, axis=0)
 
 
-def _inference_response() -> dict[str, Any]:
-    actions = structured_dummy_actions()
+def _inference_response(frame: dict[str, Any]) -> dict[str, Any]:
+    joint_position = frame["observation/joint_position"]
+    assert isinstance(joint_position, np.ndarray), type(joint_position)
+    actions = example_policy_actions(joint_position)
     resp = {
         KEY_ACTIONS: actions,
         KEY_INFERENCE_TIME: 0.25,
@@ -74,7 +99,7 @@ async def handle_inference_connection(connection: ServerConnection) -> None:
         assert hm == HardwareModel.GEN2, f"example server is gen2-only, got {hm.value}"
         _ = frame[KEY_PROMPT]
         _ = frame[KEY_MODEL_ID]
-        resp = _inference_response()
+        resp = _inference_response(frame)
         await connection.send(msgpack_encode(resp))
 
 

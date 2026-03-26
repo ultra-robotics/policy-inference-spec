@@ -41,6 +41,8 @@ class RemotePolicyPrediction:
 
 
 class RemotePolicyClient:
+    _LATENCY_LOG_INTERVAL_S = 60.0
+
     def __init__(
         self,
         predict_url: str,
@@ -52,6 +54,9 @@ class RemotePolicyClient:
         self._ws: Any = None
         self._server_config: dict[str, Any] | None = None
         self._connected_url: str | None = None
+        self._latency_window_started_at_s: float | None = None
+        self._latency_total_ms: list[float] = []
+        self._latency_server_ms: list[float] = []
 
     async def __aenter__(self) -> RemotePolicyClient:
         return self
@@ -142,11 +147,46 @@ class RemotePolicyClient:
         _log_server_config(self._server_config)
 
     async def _close_ws(self) -> None:
+        self._log_latency_summary(force=True)
         if self._ws is not None:
             await self._ws.close()
             self._ws = None
         self._server_config = None
         self._connected_url = None
+
+    def _log_latency_summary(self, *, force: bool = False, now_s: float | None = None) -> None:
+        if not self._latency_total_ms:
+            return
+        if self._latency_window_started_at_s is None:
+            self._latency_window_started_at_s = now_s if now_s is not None else time.monotonic()
+        elapsed_s = (now_s if now_s is not None else time.monotonic()) - self._latency_window_started_at_s
+        if not force and elapsed_s < self._LATENCY_LOG_INTERVAL_S:
+            return
+        total = np.array(self._latency_total_ms, dtype=np.float64)
+        server = np.array(self._latency_server_ms, dtype=np.float64)
+        network = total - server
+        LOGGER.info(
+            "Inference latency stats: n=%d window=%.0fs mean=%.1fms min=%.1fms p50=%.1fms p95=%.1fms max=%.1fms server_mean=%.1fms network_mean=%.1fms",
+            total.size,
+            elapsed_s,
+            float(total.mean()),
+            float(total.min()),
+            float(np.percentile(total, 50)),
+            float(np.percentile(total, 95)),
+            float(total.max()),
+            float(server.mean()),
+            float(network.mean()),
+        )
+        self._latency_window_started_at_s = now_s if now_s is not None else time.monotonic()
+        self._latency_total_ms.clear()
+        self._latency_server_ms.clear()
+
+    def _record_latency(self, *, total_latency_ms: float, server_latency_ms: float, now_s: float | None = None) -> None:
+        if self._latency_window_started_at_s is None:
+            self._latency_window_started_at_s = now_s if now_s is not None else time.monotonic()
+        self._latency_total_ms.append(total_latency_ms)
+        self._latency_server_ms.append(server_latency_ms)
+        self._log_latency_summary(now_s=now_s)
 
     async def predict(self, wire_frame: dict[str, Any]) -> RemotePolicyPrediction:
         await self._ensure_ws()
@@ -176,6 +216,7 @@ class RemotePolicyClient:
         infer_raw = result.get(KEY_INFERENCE_TIME)
         server_latency_ms = float(infer_raw) if infer_raw is not None else 0.0
         policy_id_used = str(result.get("policy_id", ""))
+        self._record_latency(total_latency_ms=total_latency_ms, server_latency_ms=server_latency_ms)
 
         actions_d = np.array(actions, dtype=np.float32)
         return RemotePolicyPrediction(
