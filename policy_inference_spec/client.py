@@ -40,6 +40,10 @@ class RemotePolicyPrediction:
     policy_id: str
 
 
+class InferenceServiceRestartedError(RuntimeError):
+    pass
+
+
 class RemotePolicyClient:
     _LATENCY_LOG_INTERVAL_S = 60.0
 
@@ -188,17 +192,34 @@ class RemotePolicyClient:
         self._latency_server_ms.append(server_latency_ms)
         self._log_latency_summary(now_s=now_s)
 
+    @staticmethod
+    def _close_code(exc: websockets.ConnectionClosedError) -> int | None:
+        if exc.rcvd is not None:
+            return exc.rcvd.code
+        if exc.sent is not None:
+            return exc.sent.code
+        return None
+
+    async def _raise_if_service_restarted(self, exc: websockets.ConnectionClosedError) -> None:
+        if self._close_code(exc) != 1012:
+            raise exc
+        await self._close_ws()
+        raise InferenceServiceRestartedError("Inference service restarted during prediction") from exc
+
     async def predict(self, wire_frame: dict[str, Any]) -> RemotePolicyPrediction:
-        await self._ensure_ws()
-        assert self._ws is not None
-        wire_frame = self._adapt_wire_frame_to_server_config(wire_frame)
-        validate_wire_inference_request_frame(wire_frame)
-        self._warn_on_camera_name_mismatch(wire_frame)
-        payload = msgpack_encode(wire_frame)
-        start_time_ns = time.time_ns()
-        await self._ws.send(payload)
-        response_raw = await self._ws.recv()
-        end_time_ns = time.time_ns()
+        try:
+            await self._ensure_ws()
+            assert self._ws is not None
+            wire_frame = self._adapt_wire_frame_to_server_config(wire_frame)
+            validate_wire_inference_request_frame(wire_frame)
+            self._warn_on_camera_name_mismatch(wire_frame)
+            payload = msgpack_encode(wire_frame)
+            start_time_ns = time.time_ns()
+            await self._ws.send(payload)
+            response_raw = await self._ws.recv()
+            end_time_ns = time.time_ns()
+        except websockets.ConnectionClosedError as exc:
+            await self._raise_if_service_restarted(exc)
 
         total_latency_ms = (end_time_ns - start_time_ns) / 1e6
         if isinstance(response_raw, str):
@@ -228,6 +249,7 @@ class RemotePolicyClient:
 
 __all__ = [
     "DEFAULT_PREDICT_URL",
+    "InferenceServiceRestartedError",
     "RemotePolicyClient",
     "RemotePolicyPrediction",
     "policy_ws_url",

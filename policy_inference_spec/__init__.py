@@ -1,5 +1,6 @@
 from policy_inference_spec.client import (
     DEFAULT_PREDICT_URL,
+    InferenceServiceRestartedError,
     RemotePolicyClient,
     RemotePolicyPrediction,
     policy_ws_url,
@@ -24,6 +25,7 @@ __all__ = [
     "DEFAULT_INFERENCE_SERVER_PORT",
     "DEFAULT_PREDICT_URL",
     "HardwareModel",
+    "InferenceServiceRestartedError",
     "InferenceMetadataValue",
     "NdarrayField",
     "RemotePolicyClient",
