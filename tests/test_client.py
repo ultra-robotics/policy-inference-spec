@@ -6,9 +6,12 @@ from typing import Any
 import numpy as np
 import pytest
 import simplejpeg
+from websockets.exceptions import ConnectionClosedError
+from websockets.frames import Close
 
 from policy_inference_spec.client import (
     DEFAULT_PREDICT_URL,
+    InferenceServiceRestartedError,
     RemotePolicyClient,
     policy_ws_url,
 )
@@ -116,6 +119,32 @@ async def test_predict_rejects_invalid_response() -> None:
         with pytest.raises(AssertionError):
             await client.predict(frame)
         await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_predict_raises_clear_restart_signal_on_service_restart() -> None:
+    cfg = msgpack_encode({"camera_names": ["images/main_image_left"]})
+    ws_mock = MagicMock()
+    ws_mock.recv = AsyncMock(side_effect=[cfg])
+    ws_mock.send = AsyncMock(
+        side_effect=ConnectionClosedError(
+            Close(1012, "service restart"),
+            Close(1012, "service restart"),
+            True,
+        )
+    )
+    ws_mock.close = AsyncMock()
+
+    async def fake_connect(*_a: object, **_kw: object) -> MagicMock:
+        return ws_mock
+
+    frame = _valid_gen2_wire_frame()
+    with patch("policy_inference_spec.client.websockets.connect", side_effect=fake_connect):
+        client = RemotePolicyClient("ws://127.0.0.1:9/ws")
+        with pytest.raises(InferenceServiceRestartedError, match="service restarted"):
+            await client.predict(frame)
+
+    ws_mock.close.assert_called_once()
 
 
 def test_warmup_swallows_connection_errors() -> None:
