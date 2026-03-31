@@ -4,14 +4,13 @@ import numpy as np
 import pytest
 
 from policy_inference_spec.client import RemotePolicyClient, _random_warmup_wire_frame
-from policy_inference_spec.hardware_model import HardwareModel
 from server.minimal import EXAMPLE_POLICY_ID, example_policy_actions, run_example_server, server_handshake_config
 
 pytestmark = pytest.mark.asyncio
 
 
-async def test_client_predict_against_example_server_gen2() -> None:
-    frame = _random_warmup_wire_frame(HardwareModel.GEN2)
+async def test_client_predict_against_example_server() -> None:
+    frame = _random_warmup_wire_frame()
     async with run_example_server() as url:
         client = RemotePolicyClient(url)
         async with client:

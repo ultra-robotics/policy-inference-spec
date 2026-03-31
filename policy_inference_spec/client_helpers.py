@@ -9,13 +9,9 @@ import numpy as np
 import simplejpeg
 
 from policy_inference_spec.constants import DEFAULT_INFERENCE_SERVER_PORT
-from policy_inference_spec.hardware_model import HardwareModel
 from policy_inference_spec.schema import (
-    GEN1_GATEWAY_CAMERAS,
-    GEN1_STATE_DIM,
-    GEN2_STATE_DIM,
-    GEN2_ULTRA_TO_GATEWAY_IMAGE,
-    KEY_HARDWARE_MODEL,
+    DEFAULT_HARDWARE_MODEL,
+    HardwareModel,
     KEY_MODEL_ID,
     KEY_OBS_JOINT_POSITION,
     KEY_PROMPT,
@@ -24,7 +20,6 @@ from policy_inference_spec.schema import (
 
 LOGGER = logging.getLogger(__name__)
 DEFAULT_PREDICT_URL = f"ws://inf.ultra.tech:{DEFAULT_INFERENCE_SERVER_PORT}/ws"
-DEFAULT_WARMUP_IMAGE_RESOLUTION = (256, 256)
 
 
 def policy_ws_url(url: str) -> str:
@@ -104,30 +99,20 @@ def _random_jpeg_bytes(rng: np.random.Generator, h: int, w: int) -> bytes:
 
 
 def _random_warmup_wire_frame(
-    hardware_model: HardwareModel,
+    hardware_model: str | HardwareModel = DEFAULT_HARDWARE_MODEL,
     *,
     image_resolution: tuple[int, int] | None = None,
 ) -> dict[str, Any]:
+    hm = HardwareModel(hardware_model)
     rng = np.random.default_rng()
-    height, width = image_resolution or DEFAULT_WARMUP_IMAGE_RESOLUTION
-    if hardware_model == HardwareModel.GEN1:
-        joint = rng.standard_normal(GEN1_STATE_DIM, dtype=np.float32)
-        frame: dict[str, Any] = {
-            KEY_OBS_JOINT_POSITION: joint,
-            KEY_PROMPT: "",
-            KEY_MODEL_ID: "",
-            KEY_HARDWARE_MODEL: HardwareModel.GEN1.value,
-        }
-        for cam in GEN1_GATEWAY_CAMERAS:
-            frame[f"observation/{cam}"] = _random_jpeg_bytes(rng, height, width)
-    else:
-        joint = rng.standard_normal(GEN2_STATE_DIM, dtype=np.float32)
-        frame: dict[str, Any] = {
-            KEY_OBS_JOINT_POSITION: joint,
-            KEY_PROMPT: "",
-            KEY_MODEL_ID: "",
-        }
-        for cam in GEN2_ULTRA_TO_GATEWAY_IMAGE.values():
-            frame[f"observation/{cam}"] = _random_jpeg_bytes(rng, height, width)
+    height, width = image_resolution or hm.image_resolution
+    joint = rng.standard_normal(hm.state_dim, dtype=np.float32)
+    frame: dict[str, Any] = {
+        KEY_OBS_JOINT_POSITION: joint,
+        KEY_PROMPT: "",
+        KEY_MODEL_ID: "",
+    }
+    for cam in hm.ultra_to_gateway_image.values():
+        frame[f"observation/{cam}"] = _random_jpeg_bytes(rng, height, width)
     validate_wire_inference_request_frame(frame)
     return frame

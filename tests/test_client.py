@@ -17,8 +17,9 @@ from policy_inference_spec.client import (
 )
 from policy_inference_spec.protocol import msgpack_encode
 from policy_inference_spec.schema import (
+    DEFAULT_HARDWARE_MODEL,
+    HardwareModel,
     KEY_ACTIONS,
-    KEY_HARDWARE_MODEL,
     KEY_INFERENCE_TIME,
     KEY_MODEL_ID,
     KEY_OBS_JOINT_POSITION,
@@ -32,10 +33,10 @@ def _minimal_jpeg() -> bytes:
     return simplejpeg.encode_jpeg(np.zeros((16, 16, 3), dtype=np.uint8), quality=75)
 
 
-def _valid_gen2_wire_frame() -> dict[str, Any]:
+def _valid_wire_frame() -> dict[str, Any]:
     jpeg = _minimal_jpeg()
     frame = {
-        KEY_OBS_JOINT_POSITION: np.zeros(97, dtype=np.float32),
+        KEY_OBS_JOINT_POSITION: np.zeros(DEFAULT_HARDWARE_MODEL.state_dim, dtype=np.float32),
         "observation/images/main_image_left": jpeg,
         "observation/images/left_wrist_image_left": jpeg,
         "observation/images/right_wrist_image_left": jpeg,
@@ -71,7 +72,7 @@ def test_default_predict_url_is_ws() -> None:
 @pytest.mark.asyncio
 async def test_predict_round_trip_with_mock_websocket() -> None:
     cfg = msgpack_encode({"camera_names": ["images/main_image_left"]})
-    actions = np.zeros((4, 25), dtype=np.float32)
+    actions = np.zeros((4, DEFAULT_HARDWARE_MODEL.action_dim), dtype=np.float32)
     resp = msgpack_encode(
         {
             KEY_ACTIONS: actions,
@@ -87,14 +88,14 @@ async def test_predict_round_trip_with_mock_websocket() -> None:
     async def fake_connect(*_a: object, **_kw: object) -> MagicMock:
         return ws_mock
 
-    frame = _valid_gen2_wire_frame()
+    frame = _valid_wire_frame()
     with patch("policy_inference_spec.client.websockets.connect", side_effect=fake_connect):
         client = RemotePolicyClient("ws://127.0.0.1:9/ws")
         pred = await client.predict(frame)
         await client.aclose()
 
     assert pred.policy_id == "policy-1"
-    assert pred.actions_d.shape == (4, 25)
+    assert pred.actions_d.shape == (4, DEFAULT_HARDWARE_MODEL.action_dim)
     assert pred.actions_d.dtype == np.float32
     assert pred.total_latency_ms >= 0.0
     ws_mock.send.assert_called_once()
@@ -114,7 +115,7 @@ async def test_predict_rejects_invalid_response() -> None:
     async def fake_connect(*_a: object, **_kw: object) -> MagicMock:
         return ws_mock
 
-    frame = _valid_gen2_wire_frame()
+    frame = _valid_wire_frame()
     with patch("policy_inference_spec.client.websockets.connect", side_effect=fake_connect):
         client = RemotePolicyClient("ws://127.0.0.1:9/ws")
         with pytest.raises(AssertionError):
@@ -139,7 +140,7 @@ async def test_predict_raises_clear_restart_signal_on_service_restart() -> None:
     async def fake_connect(*_a: object, **_kw: object) -> MagicMock:
         return ws_mock
 
-    frame = _valid_gen2_wire_frame()
+    frame = _valid_wire_frame()
     with patch("policy_inference_spec.client.websockets.connect", side_effect=fake_connect):
         client = RemotePolicyClient("ws://127.0.0.1:9/ws")
         with pytest.raises(InferenceServiceRestartedError, match="service restarted"):
@@ -155,11 +156,11 @@ def test_warmup_swallows_connection_errors() -> None:
         assert client.warmup() is False
 
 
-def test_validate_wire_inference_request_frame_raises_value_error_for_invalid_hardware_model() -> None:
+def test_validate_wire_inference_request_frame_rejects_hardware_model_field() -> None:
     jpeg = _minimal_jpeg()
     frame = {
-        KEY_HARDWARE_MODEL: "gen3",
-        KEY_OBS_JOINT_POSITION: np.zeros(97, dtype=np.float32),
+        "hardware_model": "gen2",
+        KEY_OBS_JOINT_POSITION: np.zeros(DEFAULT_HARDWARE_MODEL.state_dim, dtype=np.float32),
         "observation/images/main_image_left": jpeg,
         "observation/images/left_wrist_image_left": jpeg,
         "observation/images/right_wrist_image_left": jpeg,
@@ -167,10 +168,20 @@ def test_validate_wire_inference_request_frame_raises_value_error_for_invalid_ha
         KEY_MODEL_ID: "",
     }
 
-    with pytest.raises(ValueError):
+    with pytest.raises(AssertionError, match="wire inference keys"):
         validate_wire_inference_request_frame(frame)
 
 
-def test_wire_joint_position_array_raises_value_error_for_invalid_hardware_model() -> None:
+def test_wire_joint_position_array_accepts_hardware_model_string() -> None:
+    joint = wire_joint_position_array(np.zeros(DEFAULT_HARDWARE_MODEL.state_dim, dtype=np.float32), "gen2")
+    assert joint.shape == (DEFAULT_HARDWARE_MODEL.state_dim,)
+
+
+def test_wire_joint_position_array_accepts_explicit_hardware_model_enum() -> None:
+    joint = wire_joint_position_array(np.zeros(DEFAULT_HARDWARE_MODEL.state_dim, dtype=np.float32), HardwareModel.GEN2)
+    assert joint.shape == (DEFAULT_HARDWARE_MODEL.state_dim,)
+
+
+def test_wire_joint_position_array_rejects_invalid_hardware_model() -> None:
     with pytest.raises(ValueError):
-        wire_joint_position_array(np.zeros(97, dtype=np.float32), "gen3")
+        wire_joint_position_array(np.zeros(DEFAULT_HARDWARE_MODEL.state_dim, dtype=np.float32), "gen3")

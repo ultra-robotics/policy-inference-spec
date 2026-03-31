@@ -11,7 +11,7 @@ from policy_inference_spec.client import (
     RemotePolicyClient,
     _random_warmup_wire_frame,
 )
-from policy_inference_spec.hardware_model import HardwareModel
+from policy_inference_spec.schema import DEFAULT_HARDWARE_MODEL
 
 
 def _parse_args() -> argparse.Namespace:
@@ -21,7 +21,6 @@ def _parse_args() -> argparse.Namespace:
         default=os.environ.get("POLICY_SERVER_URL") or DEFAULT_PREDICT_URL,
         help=f"WebSocket URL (default: $POLICY_SERVER_URL or {DEFAULT_PREDICT_URL!r})",
     )
-    p.add_argument("--hardware-model", choices=("gen1", "gen2"), default="gen2")
     p.add_argument(
         "--predicts",
         type=int,
@@ -41,18 +40,17 @@ async def _run() -> int:
         print("--predicts must be >= 1", file=sys.stderr)
         return 2
 
-    hm = HardwareModel(args.hardware_model)
     headers = {"x-api-key": args.api_key} if args.api_key else None
     client = RemotePolicyClient(args.url, policy_auth_headers=headers)
 
-    print(f"URL {args.url!r} hardware_model={hm.value}", flush=True)
-    if not client.warmup(hardware_model=hm):
+    print(f"URL {args.url!r} hardware_model={DEFAULT_HARDWARE_MODEL.value}", flush=True)
+    if not client.warmup():
         print("Warmup failed.", file=sys.stderr)
         return 1
 
     async with client:
         for i in range(args.predicts):
-            frame = _random_warmup_wire_frame(hm)
+            frame = _random_warmup_wire_frame()
             pred = await client.predict(frame)
             print(
                 f"predict {i + 1}/{args.predicts}: "

@@ -20,9 +20,10 @@ from policy_inference_spec.client_helpers import (
     _wire_camera_names,
     policy_ws_url,
 )
-from policy_inference_spec.hardware_model import HardwareModel
 from policy_inference_spec.protocol import chw_from_wire_image, encode_ndarray, msgpack_decode, msgpack_encode
 from policy_inference_spec.schema import (
+    DEFAULT_HARDWARE_MODEL,
+    HardwareModel,
     KEY_ACTIONS,
     KEY_INFERENCE_TIME,
     KEY_OBS_JOINT_POSITION,
@@ -111,7 +112,7 @@ class RemotePolicyClient:
             adapted[key] = field.data
         return adapted
 
-    def warmup(self, *, hardware_model: str | HardwareModel = HardwareModel.GEN2) -> bool:
+    def warmup(self, *, hardware_model: str | HardwareModel = DEFAULT_HARDWARE_MODEL) -> bool:
         try:
             hm = HardwareModel(hardware_model)
             uri = self.predict_url
@@ -122,7 +123,10 @@ class RemotePolicyClient:
                 assert isinstance(server_config, dict), "ServerConfig must be a dict"
                 _log_server_config(server_config)
                 self._server_config = server_config
-                wire_frame = _random_warmup_wire_frame(hm, image_resolution=_server_image_resolution(server_config))
+                wire_frame = _random_warmup_wire_frame(
+                    hm,
+                    image_resolution=_server_image_resolution(server_config),
+                )
                 ws.send(msgpack_encode(wire_frame))
                 response_raw = ws.recv()
                 if isinstance(response_raw, bytes):

@@ -14,8 +14,9 @@ from policy_inference_spec.protocol import (
     msgpack_decode,
     msgpack_encode,
 )
-from policy_inference_spec.hardware_model import HardwareModel
 from policy_inference_spec.schema import (
+    DEFAULT_HARDWARE_MODEL,
+    HardwareModel,
     validate_ultra_arrays_for_hardware_model,
     validate_wire_inference_request_frame,
     validate_wire_inference_response,
@@ -24,6 +25,7 @@ from policy_inference_spec.schema import (
 __all__ = [
     "DEFAULT_INFERENCE_SERVER_PORT",
     "DEFAULT_PREDICT_URL",
+    "DEFAULT_HARDWARE_MODEL",
     "HardwareModel",
     "InferenceServiceRestartedError",
     "InferenceMetadataValue",
