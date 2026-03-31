@@ -5,21 +5,23 @@ import asyncio
 import logging
 import os
 import sys
+from contextlib import asynccontextmanager
+from typing import AsyncIterator
 
 from policy_inference_spec.client import (
-    DEFAULT_PREDICT_URL,
     RemotePolicyClient,
     _random_warmup_wire_frame,
 )
 from policy_inference_spec.hardware_model import DEFAULT_HARDWARE_MODEL
+from server.minimal import run_example_server
 
 
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Warmup + predict smoke test against a policy inference WebSocket server.")
     p.add_argument(
         "--url",
-        default=os.environ.get("POLICY_SERVER_URL") or DEFAULT_PREDICT_URL,
-        help=f"WebSocket URL (default: $POLICY_SERVER_URL or {DEFAULT_PREDICT_URL!r})",
+        default=os.environ.get("POLICY_SERVER_URL"),
+        help="WebSocket URL. If omitted, starts the local example server. Also reads $POLICY_SERVER_URL.",
     )
     p.add_argument(
         "--predicts",
@@ -33,6 +35,15 @@ def _parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
+@asynccontextmanager
+async def _smoke_server_url(url: str | None) -> AsyncIterator[str]:
+    if url is not None:
+        yield url
+        return
+    async with run_example_server() as local_url:
+        yield local_url
+
+
 async def _run() -> int:
     args = _parse_args()
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO, format="%(levelname)s %(message)s")
@@ -41,23 +52,24 @@ async def _run() -> int:
         return 2
 
     headers = {"x-api-key": args.api_key} if args.api_key else None
-    client = RemotePolicyClient(args.url, policy_auth_headers=headers)
+    async with _smoke_server_url(args.url) as predict_url:
+        client = RemotePolicyClient(predict_url, policy_auth_headers=headers)
 
-    print(f"URL {args.url!r} hardware_model={DEFAULT_HARDWARE_MODEL.value}", flush=True)
-    if not client.warmup():
-        print("Warmup failed.", file=sys.stderr)
-        return 1
+        print(f"URL {predict_url!r} hardware_model={DEFAULT_HARDWARE_MODEL.value}", flush=True)
+        if not await asyncio.to_thread(client.warmup):
+            print("Warmup failed.", file=sys.stderr)
+            return 1
 
-    async with client:
-        for i in range(args.predicts):
-            frame = _random_warmup_wire_frame()
-            pred = await client.predict(frame)
-            print(
-                f"predict {i + 1}/{args.predicts}: "
-                f"total_latency_ms={pred.total_latency_ms:.1f} "
-                f"actions_shape={tuple(pred.actions_d.shape)} "
-                f"policy_id={pred.policy_id!r}",
-            )
+        async with client:
+            for i in range(args.predicts):
+                frame = _random_warmup_wire_frame()
+                pred = await client.predict(frame)
+                print(
+                    f"predict {i + 1}/{args.predicts}: "
+                    f"total_latency_ms={pred.total_latency_ms:.1f} "
+                    f"actions_shape={tuple(pred.actions_d.shape)} "
+                    f"policy_id={pred.policy_id!r}",
+                )
     return 0
 
 

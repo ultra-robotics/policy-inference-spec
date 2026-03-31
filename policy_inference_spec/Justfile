@@ -4,6 +4,7 @@
 test:
     cd "{{justfile_directory()}}/.." && uv run --extra dev pytest tests/ -q
 
-# Warmup + predict smoke test (e.g. `just smoke --url ws://127.0.0.1:8765/ws --predicts 3`)
+# Warmup + predict smoke test. By default this starts the local example server.
+# Example remote usage: `just smoke --url ws://127.0.0.1:8765/ws --predicts 3`
 smoke *args:
     cd "{{justfile_directory()}}/.." && uv run python -m policy_inference_spec.smoke {{args}}
