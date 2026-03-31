@@ -3,7 +3,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from policy_inference_spec.schema import (
+from policy_inference_spec.constants import OBS_JOINT_POSITION_KEY
+from policy_inference_spec.hardware_model import (
     DEFAULT_HARDWARE_MODEL,
     HardwareModel,
     validate_ultra_arrays_for_hardware_model,
@@ -27,20 +28,19 @@ def test_hardware_model_properties() -> None:
     assert DEFAULT_HARDWARE_MODEL.action_dim == 25
     assert DEFAULT_HARDWARE_MODEL.image_resolution == (360, 640)
     assert DEFAULT_HARDWARE_MODEL.cameras == (
-        "images/main_image_left",
-        "images/left_wrist_image_left",
-        "images/right_wrist_image_left",
+        "images/main_image",
+        "images/left_wrist_image",
+        "images/right_wrist_image",
     )
 
 
 def test_validate_ultra_arrays_accepts_gateway_camera_names() -> None:
     image = np.zeros((1, 1, 3), dtype=np.uint8)
     arrays = {
-        "observation.state": np.zeros((1, DEFAULT_HARDWARE_MODEL.state_dim), dtype=np.float32),
-        "observation/images/main_image_left": image,
-        "observation/images/left_wrist_image_left": image,
-        "observation/images/right_wrist_image_left": image,
+        OBS_JOINT_POSITION_KEY: np.zeros((1, DEFAULT_HARDWARE_MODEL.state_dim), dtype=np.float32),
     }
+    for camera in DEFAULT_HARDWARE_MODEL.cameras:
+        arrays[f"observation/{camera}"] = image
 
     validate_ultra_arrays_for_hardware_model(arrays)
 
@@ -48,7 +48,7 @@ def test_validate_ultra_arrays_accepts_gateway_camera_names() -> None:
 def test_validate_ultra_arrays_rejects_legacy_ultra_camera_names() -> None:
     image = np.zeros((1, 1, 3), dtype=np.uint8)
     arrays = {
-        "observation.state": np.zeros((1, DEFAULT_HARDWARE_MODEL.state_dim), dtype=np.float32),
+        OBS_JOINT_POSITION_KEY: np.zeros((1, DEFAULT_HARDWARE_MODEL.state_dim), dtype=np.float32),
         "observation.images.head": image,
         "observation.images.left_wrist": image,
         "observation.images.right_wrist": image,

@@ -7,14 +7,14 @@ from typing import Any
 import numpy as np
 import numpy.typing as npt
 
-KEY_OBS_JOINT_POSITION = "observation/joint_position"  # State vector (Actually contains more than just qpos)
-KEY_PROMPT = "prompt"
-KEY_ACTIONS = "actions"
-KEY_INFERENCE_TIME = "inference_time"
-KEY_ENDPOINT = "endpoint"
-ENDPOINT_RESET = "reset"
-ENDPOINT_TELEMETRY = "telemetry"
-KEY_MODEL_ID = "model_id"
+from policy_inference_spec.constants import (
+    ACTIONS_KEY,
+    ENDPOINT_KEY,
+    INFERENCE_TIME_KEY,
+    MODEL_ID_KEY,
+    OBS_JOINT_POSITION_KEY,
+    PROMPT_KEY,
+)
 
 
 @dataclass(frozen=True)
@@ -64,9 +64,9 @@ _HARDWARE_MODEL_SPECS = {
         action_dim=25,
         image_resolution=(360, 640),
         cameras=(
-            "images/main_image_left",
-            "images/left_wrist_image_left",
-            "images/right_wrist_image_left",
+            "images/main_image",
+            "images/left_wrist_image",
+            "images/right_wrist_image",
         ),
     ),
 }
@@ -101,11 +101,11 @@ def wire_joint_position_array(
     hardware_model: str | HardwareModel = DEFAULT_HARDWARE_MODEL,
 ) -> npt.NDArray[np.float32]:
     hm = HardwareModel(hardware_model)
-    assert isinstance(value, np.ndarray), f"{KEY_OBS_JOINT_POSITION} must be ndarray"
+    assert isinstance(value, np.ndarray), f"{OBS_JOINT_POSITION_KEY} must be ndarray"
     joint = np.asarray(value, dtype=np.float32)
-    assert joint.ndim == 1, f"{KEY_OBS_JOINT_POSITION} must be 1-D, got shape {joint.shape}"
+    assert joint.ndim == 1, f"{OBS_JOINT_POSITION_KEY} must be 1-D, got shape {joint.shape}"
     assert joint.shape == (hm.state_dim,), (
-        f"{hm.value} {KEY_OBS_JOINT_POSITION} must be ({hm.state_dim},), got {joint.shape}"
+        f"{hm.value} {OBS_JOINT_POSITION_KEY} must be ({hm.state_dim},), got {joint.shape}"
     )
     return joint
 
@@ -116,10 +116,10 @@ def wire_inference_request_keys(*, hardware_model: HardwareModel = DEFAULT_HARDW
     )
     return frozenset(
         {
-            KEY_OBS_JOINT_POSITION,
+            OBS_JOINT_POSITION_KEY,
             *_observation_keys(hardware_model),
-            KEY_PROMPT,
-            KEY_MODEL_ID,
+            PROMPT_KEY,
+            MODEL_ID_KEY,
         }
     )
 
@@ -131,12 +131,12 @@ def validate_ultra_arrays_for_hardware_model(
     hm = HardwareModel(hardware_model)
     image_keys = set(_observation_keys(hm))
     keys = set(arrays.keys())
-    expected = {"observation.state", *image_keys}
+    expected = {OBS_JOINT_POSITION_KEY, *image_keys}
     assert keys == expected, f"{hm.value} request keys {keys} != expected {expected}"
-    state = arrays["observation.state"]
-    expected_state_shape = (1, hm.state_dim)
-    assert state.shape == expected_state_shape, (
-        f"{hm.value} observation.state shape {state.shape} != {expected_state_shape}"
+    joint_position = arrays[OBS_JOINT_POSITION_KEY]
+    expected_joint_position_shape = (1, hm.state_dim)
+    assert joint_position.shape == expected_joint_position_shape, (
+        f"{hm.value} {OBS_JOINT_POSITION_KEY} shape {joint_position.shape} != {expected_joint_position_shape}"
     )
     for key in image_keys:
         image = arrays[key]
@@ -148,16 +148,17 @@ def validate_ultra_arrays_for_hardware_model(
         assert image.shape[-1] == 3, f"{hm.value} image {key} channel dim must be 3, got {image.shape}"
 
 
-def validate_wire_inference_request_frame(frame: dict[str, Any]) -> HardwareModel:
+def validate_wire_inference_request_frame(
+    frame: dict[str, Any], hardware_model: HardwareModel = DEFAULT_HARDWARE_MODEL
+) -> HardwareModel:
     assert isinstance(frame, dict), f"wire frame must be dict, got {type(frame)}"
-    assert KEY_ENDPOINT not in frame, "inference frame must not contain endpoint"
-    hardware_model = DEFAULT_HARDWARE_MODEL
+    assert ENDPOINT_KEY not in frame, "inference frame must not contain endpoint"
     allowed = wire_inference_request_keys(hardware_model=hardware_model)
     keys = set(frame.keys())
     assert keys == allowed, f"wire inference keys {keys} != expected {allowed}"
-    assert isinstance(frame[KEY_PROMPT], str), f"{KEY_PROMPT} must be str"
-    assert isinstance(frame[KEY_MODEL_ID], str), f"{KEY_MODEL_ID} must be str"
-    _ = wire_joint_position_array(frame[KEY_OBS_JOINT_POSITION], hardware_model)
+    assert isinstance(frame[PROMPT_KEY], str), f"{PROMPT_KEY} must be str"
+    assert isinstance(frame[MODEL_ID_KEY], str), f"{MODEL_ID_KEY} must be str"
+    _ = wire_joint_position_array(frame[OBS_JOINT_POSITION_KEY], hardware_model)
     for k in _observation_keys(hardware_model):
         v = frame[k]
         assert isinstance(v, (bytes, np.ndarray)), f"{k} must be jpeg bytes or ndarray, got {type(v)}"
@@ -174,20 +175,20 @@ def validate_wire_inference_response(
     assert isinstance(result, dict), f"response must be dict, got {type(result)}"
     response_summary = _summarize_response_payload(result)
     assert "error" not in result, f"unexpected error payload: {response_summary}"
-    allowed = frozenset({KEY_ACTIONS, KEY_INFERENCE_TIME, "policy_id"})
+    allowed = frozenset({ACTIONS_KEY, INFERENCE_TIME_KEY, "policy_id"})
     assert set(result.keys()) <= allowed, (
         f"response keys {set(result.keys())} not subset of {allowed}; summary={response_summary}"
     )
-    assert KEY_ACTIONS in result, f"response missing actions; summary={response_summary}"
-    actions = result[KEY_ACTIONS]
+    assert ACTIONS_KEY in result, f"response missing actions; summary={response_summary}"
+    actions = result[ACTIONS_KEY]
     assert isinstance(actions, np.ndarray), f"actions must be ndarray, got {type(actions)}; summary={response_summary}"
     assert actions.ndim == 2, f"actions must be 2-D, got shape {actions.shape}"
     assert actions.shape[1] == hardware_model.action_dim, (
         f"actions second dim must be {hardware_model.action_dim}, got {actions.shape}"
     )
     assert np.issubdtype(actions.dtype, np.floating), f"actions must be floating ndarray, got {actions.dtype}"
-    if KEY_INFERENCE_TIME in result:
-        assert isinstance(result[KEY_INFERENCE_TIME], (int, float)), "inference_time must be numeric"
+    if INFERENCE_TIME_KEY in result:
+        assert isinstance(result[INFERENCE_TIME_KEY], (int, float)), "inference_time must be numeric"
     if "policy_id" in result:
         assert isinstance(result["policy_id"], str), "policy_id must be str"
 
@@ -195,14 +196,6 @@ def validate_wire_inference_response(
 __all__ = [
     "DEFAULT_HARDWARE_MODEL",
     "HardwareModel",
-    "ENDPOINT_RESET",
-    "ENDPOINT_TELEMETRY",
-    "KEY_ACTIONS",
-    "KEY_ENDPOINT",
-    "KEY_INFERENCE_TIME",
-    "KEY_MODEL_ID",
-    "KEY_OBS_JOINT_POSITION",
-    "KEY_PROMPT",
     "validate_ultra_arrays_for_hardware_model",
     "validate_wire_inference_request_frame",
     "validate_wire_inference_response",

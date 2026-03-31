@@ -14,7 +14,7 @@ from policy_inference_spec.protocol import (
     msgpack_decode,
     msgpack_encode,
 )
-from policy_inference_spec.schema import (
+from policy_inference_spec.hardware_model import (
     DEFAULT_HARDWARE_MODEL,
     HardwareModel,
     validate_ultra_arrays_for_hardware_model,

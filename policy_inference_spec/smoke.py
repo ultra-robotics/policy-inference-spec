@@ -11,7 +11,7 @@ from policy_inference_spec.client import (
     RemotePolicyClient,
     _random_warmup_wire_frame,
 )
-from policy_inference_spec.schema import DEFAULT_HARDWARE_MODEL
+from policy_inference_spec.hardware_model import DEFAULT_HARDWARE_MODEL
 
 
 def _parse_args() -> argparse.Namespace:

@@ -20,13 +20,15 @@ from policy_inference_spec.client_helpers import (
     _wire_camera_names,
     policy_ws_url,
 )
+from policy_inference_spec.constants import (
+    ACTIONS_KEY,
+    INFERENCE_TIME_KEY,
+    OBS_JOINT_POSITION_KEY,
+)
 from policy_inference_spec.protocol import encode_ndarray, hwc_from_wire_image, msgpack_decode, msgpack_encode
-from policy_inference_spec.schema import (
+from policy_inference_spec.hardware_model import (
     DEFAULT_HARDWARE_MODEL,
     HardwareModel,
-    KEY_ACTIONS,
-    KEY_INFERENCE_TIME,
-    KEY_OBS_JOINT_POSITION,
     validate_wire_inference_request_frame,
     validate_wire_inference_response,
 )
@@ -104,7 +106,7 @@ class RemotePolicyClient:
         target_h, target_w = image_resolution
         adapted = dict(wire_frame)
         for key, value in wire_frame.items():
-            if not key.startswith("observation/") or key == KEY_OBS_JOINT_POSITION:
+            if not key.startswith("observation/") or key == OBS_JOINT_POSITION_KEY:
                 continue
             hwc = hwc_from_wire_image(value, (target_h, target_w, 3))
             field = encode_ndarray(hwc, jpeg_quality=75)
@@ -237,8 +239,8 @@ class RemotePolicyClient:
         except AssertionError as exc:
             LOGGER.error("Malformed inference response: %s", _summarize_server_payload(result))
             raise AssertionError(f"{exc}") from exc
-        actions = result[KEY_ACTIONS]
-        infer_raw = result.get(KEY_INFERENCE_TIME)
+        actions = result[ACTIONS_KEY]
+        infer_raw = result.get(INFERENCE_TIME_KEY)
         server_latency_ms = float(infer_raw) if infer_raw is not None else 0.0
         policy_id_used = str(result.get("policy_id", ""))
         self._record_latency(total_latency_ms=total_latency_ms, server_latency_ms=server_latency_ms)

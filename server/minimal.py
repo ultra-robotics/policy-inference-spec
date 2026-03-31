@@ -8,16 +8,19 @@ import torch
 import websockets
 from websockets.asyncio.server import ServerConnection
 
-from policy_inference_spec.protocol import msgpack_decode, msgpack_encode
-from policy_inference_spec.schema import (
-    DEFAULT_HARDWARE_MODEL,
+from policy_inference_spec.constants import (
+    ACTIONS_KEY,
+    ENDPOINT_KEY,
     ENDPOINT_RESET,
     ENDPOINT_TELEMETRY,
-    KEY_ACTIONS,
-    KEY_ENDPOINT,
-    KEY_INFERENCE_TIME,
-    KEY_MODEL_ID,
-    KEY_PROMPT,
+    INFERENCE_TIME_KEY,
+    MODEL_ID_KEY,
+    OBS_JOINT_POSITION_KEY,
+    PROMPT_KEY,
+)
+from policy_inference_spec.protocol import msgpack_decode, msgpack_encode
+from policy_inference_spec.hardware_model import (
+    DEFAULT_HARDWARE_MODEL,
     validate_wire_inference_request_frame,
     validate_wire_inference_response,
 )
@@ -72,12 +75,12 @@ def example_policy_actions(
 
 
 def _inference_response(frame: dict[str, Any]) -> dict[str, Any]:
-    joint_position = frame["observation/joint_position"]
+    joint_position = frame[OBS_JOINT_POSITION_KEY]
     assert isinstance(joint_position, np.ndarray), type(joint_position)
     actions = example_policy_actions(joint_position)
     resp = {
-        KEY_ACTIONS: actions,
-        KEY_INFERENCE_TIME: 0.25,
+        ACTIONS_KEY: actions,
+        INFERENCE_TIME_KEY: 0.25,
         "policy_id": EXAMPLE_POLICY_ID,
     }
     validate_wire_inference_response(resp)
@@ -93,15 +96,15 @@ async def handle_inference_connection(connection: ServerConnection) -> None:
         if not isinstance(frame, dict):
             await connection.send(msgpack_encode({"error": "expected dict frame"}))
             continue
-        if frame.get(KEY_ENDPOINT) == ENDPOINT_RESET:
+        if frame.get(ENDPOINT_KEY) == ENDPOINT_RESET:
             await connection.send(msgpack_encode({"status": "ok"}))
             continue
-        if frame.get(KEY_ENDPOINT) == ENDPOINT_TELEMETRY:
+        if frame.get(ENDPOINT_KEY) == ENDPOINT_TELEMETRY:
             await connection.send(msgpack_encode({"status": "ok"}))
             continue
         validate_wire_inference_request_frame(frame)
-        _ = frame[KEY_PROMPT]
-        _ = frame[KEY_MODEL_ID]
+        _ = frame[PROMPT_KEY]
+        _ = frame[MODEL_ID_KEY]
         resp = _inference_response(frame)
         await connection.send(msgpack_encode(resp))
 

@@ -25,7 +25,8 @@ pip install -e .
 - **Inference response:** `actions` (2-D ndarray; second dim **25**), `inference_time` (server-side ms), and **`policy_id`** (string).
 - **Control:** `{"endpoint": "reset"}` → `{"status": "ok"}`; `{"endpoint": "telemetry", ...}` → `{"status": "ok"}`.
 
-Strict validation helpers live in `policy_inference_spec.schema` (`validate_wire_inference_request_frame`, `validate_wire_inference_response`).
+Strict validation helpers live in `policy_inference_spec.hardware_model` (`validate_wire_inference_request_frame`, `validate_wire_inference_response`).
+Wire and endpoint constants live in `policy_inference_spec.constants`.
 
 ## Features to be added in future
 
@@ -36,10 +37,10 @@ Strict validation helpers live in `policy_inference_spec.schema` (`validate_wire
 
 | Module | Role |
 |--------|------|
+| `constants.py` | Shared wire keys, endpoint names, and default server port |
 | `protocol.py` | msgpack encode/decode, `__ndarray__`, `NdarrayField`, JPEG/raw image helpers |
-| `schema.py` | Wire key constants, hardware-model-aware shapes, strict request/response validation |
+| `hardware_model.py` | Hardware-model-aware shapes and strict request/response validation |
 | `client.py` | `RemotePolicyClient` (async transport + validation), `policy_ws_url`, warmup |
-| `constants.py` | Default inference port |
 
 ## License
 

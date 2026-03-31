@@ -9,6 +9,13 @@ import simplejpeg
 from websockets.exceptions import ConnectionClosedError
 from websockets.frames import Close
 
+from policy_inference_spec.constants import (
+    ACTIONS_KEY,
+    INFERENCE_TIME_KEY,
+    MODEL_ID_KEY,
+    OBS_JOINT_POSITION_KEY,
+    PROMPT_KEY,
+)
 from policy_inference_spec.client import (
     DEFAULT_PREDICT_URL,
     InferenceServiceRestartedError,
@@ -16,14 +23,9 @@ from policy_inference_spec.client import (
     policy_ws_url,
 )
 from policy_inference_spec.protocol import msgpack_encode
-from policy_inference_spec.schema import (
+from policy_inference_spec.hardware_model import (
     DEFAULT_HARDWARE_MODEL,
     HardwareModel,
-    KEY_ACTIONS,
-    KEY_INFERENCE_TIME,
-    KEY_MODEL_ID,
-    KEY_OBS_JOINT_POSITION,
-    KEY_PROMPT,
     validate_wire_inference_request_frame,
     wire_joint_position_array,
 )
@@ -36,13 +38,12 @@ def _minimal_jpeg() -> bytes:
 def _valid_wire_frame() -> dict[str, Any]:
     jpeg = _minimal_jpeg()
     frame = {
-        KEY_OBS_JOINT_POSITION: np.zeros(DEFAULT_HARDWARE_MODEL.state_dim, dtype=np.float32),
-        "observation/images/main_image_left": jpeg,
-        "observation/images/left_wrist_image_left": jpeg,
-        "observation/images/right_wrist_image_left": jpeg,
-        KEY_PROMPT: "test",
-        KEY_MODEL_ID: "",
+        OBS_JOINT_POSITION_KEY: np.zeros(DEFAULT_HARDWARE_MODEL.state_dim, dtype=np.float32),
+        PROMPT_KEY: "test",
+        MODEL_ID_KEY: "",
     }
+    for camera in DEFAULT_HARDWARE_MODEL.cameras:
+        frame[f"observation/{camera}"] = jpeg
     validate_wire_inference_request_frame(frame)
     return frame
 
@@ -71,12 +72,12 @@ def test_default_predict_url_is_ws() -> None:
 
 @pytest.mark.asyncio
 async def test_predict_round_trip_with_mock_websocket() -> None:
-    cfg = msgpack_encode({"camera_names": ["images/main_image_left"]})
+    cfg = msgpack_encode({"camera_names": [DEFAULT_HARDWARE_MODEL.cameras[0]]})
     actions = np.zeros((4, DEFAULT_HARDWARE_MODEL.action_dim), dtype=np.float32)
     resp = msgpack_encode(
         {
-            KEY_ACTIONS: actions,
-            KEY_INFERENCE_TIME: 3.5,
+            ACTIONS_KEY: actions,
+            INFERENCE_TIME_KEY: 3.5,
             "policy_id": "policy-1",
         }
     )
@@ -106,7 +107,7 @@ async def test_predict_round_trip_with_mock_websocket() -> None:
 async def test_predict_rejects_invalid_response() -> None:
     cfg = msgpack_encode({})
     bad_actions = np.zeros((1, 7), dtype=np.float32)
-    resp = msgpack_encode({KEY_ACTIONS: bad_actions, KEY_INFERENCE_TIME: 1.0, "policy_id": ""})
+    resp = msgpack_encode({ACTIONS_KEY: bad_actions, INFERENCE_TIME_KEY: 1.0, "policy_id": ""})
     ws_mock = MagicMock()
     ws_mock.recv = AsyncMock(side_effect=[cfg, resp])
     ws_mock.send = AsyncMock()
@@ -125,7 +126,7 @@ async def test_predict_rejects_invalid_response() -> None:
 
 @pytest.mark.asyncio
 async def test_predict_raises_clear_restart_signal_on_service_restart() -> None:
-    cfg = msgpack_encode({"camera_names": ["images/main_image_left"]})
+    cfg = msgpack_encode({"camera_names": [DEFAULT_HARDWARE_MODEL.cameras[0]]})
     ws_mock = MagicMock()
     ws_mock.recv = AsyncMock(side_effect=[cfg])
     ws_mock.send = AsyncMock(
@@ -160,13 +161,12 @@ def test_validate_wire_inference_request_frame_rejects_hardware_model_field() ->
     jpeg = _minimal_jpeg()
     frame = {
         "hardware_model": "gen2",
-        KEY_OBS_JOINT_POSITION: np.zeros(DEFAULT_HARDWARE_MODEL.state_dim, dtype=np.float32),
-        "observation/images/main_image_left": jpeg,
-        "observation/images/left_wrist_image_left": jpeg,
-        "observation/images/right_wrist_image_left": jpeg,
-        KEY_PROMPT: "test",
-        KEY_MODEL_ID: "",
+        OBS_JOINT_POSITION_KEY: np.zeros(DEFAULT_HARDWARE_MODEL.state_dim, dtype=np.float32),
+        PROMPT_KEY: "test",
+        MODEL_ID_KEY: "",
     }
+    for camera in DEFAULT_HARDWARE_MODEL.cameras:
+        frame[f"observation/{camera}"] = jpeg
 
     with pytest.raises(AssertionError, match="wire inference keys"):
         validate_wire_inference_request_frame(frame)

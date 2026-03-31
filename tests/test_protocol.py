@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 
 from policy_inference_spec.protocol import NdarrayField, decode_ndarray, encode_ndarray, msgpack_decode, msgpack_encode
-from policy_inference_spec.schema import validate_wire_inference_response
+from policy_inference_spec.hardware_model import validate_wire_inference_response
 
 
 def test_msgpack_encode_uses_flat_ndarray_tags() -> None:

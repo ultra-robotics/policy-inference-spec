@@ -8,13 +8,15 @@ from urllib.parse import urlparse
 import numpy as np
 import simplejpeg
 
-from policy_inference_spec.constants import DEFAULT_INFERENCE_SERVER_PORT
-from policy_inference_spec.schema import (
+from policy_inference_spec.constants import (
+    DEFAULT_INFERENCE_SERVER_PORT,
+    MODEL_ID_KEY,
+    OBS_JOINT_POSITION_KEY,
+    PROMPT_KEY,
+)
+from policy_inference_spec.hardware_model import (
     DEFAULT_HARDWARE_MODEL,
     HardwareModel,
-    KEY_MODEL_ID,
-    KEY_OBS_JOINT_POSITION,
-    KEY_PROMPT,
     validate_wire_inference_request_frame,
 )
 
@@ -38,7 +40,7 @@ def _log_server_config(server_config: dict[str, Any]) -> None:
 def _wire_camera_names(wire_frame: dict[str, Any]) -> list[str]:
     camera_names: list[str] = []
     for key in wire_frame:
-        if not key.startswith("observation/") or key == KEY_OBS_JOINT_POSITION:
+        if not key.startswith("observation/") or key == OBS_JOINT_POSITION_KEY:
             continue
         camera_names.append(key.removeprefix("observation/"))
     return sorted(camera_names)
@@ -111,9 +113,9 @@ def _random_warmup_wire_frame(
     height, width = image_resolution or hm.image_resolution
     joint = rng.standard_normal(hm.state_dim, dtype=np.float32)
     frame: dict[str, Any] = {
-        KEY_OBS_JOINT_POSITION: joint,
-        KEY_PROMPT: "",
-        KEY_MODEL_ID: "",
+        OBS_JOINT_POSITION_KEY: joint,
+        PROMPT_KEY: "",
+        MODEL_ID_KEY: "",
     }
     for cam in hm.cameras:
         frame[f"observation/{cam}"] = _random_jpeg_bytes(rng, height, width)
