@@ -1,3 +1,7 @@
+from beartype.claw import beartype_this_package
+
+beartype_this_package()
+
 from policy_inference_spec.client import (
     DEFAULT_PREDICT_URL,
     InferenceServiceRestartedError,

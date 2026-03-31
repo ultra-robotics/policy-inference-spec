@@ -25,9 +25,7 @@ from policy_inference_spec.client import (
 from policy_inference_spec.protocol import msgpack_encode
 from policy_inference_spec.hardware_model import (
     DEFAULT_HARDWARE_MODEL,
-    HardwareModel,
     validate_wire_inference_request_frame,
-    wire_joint_position_array,
 )
 
 
@@ -37,7 +35,7 @@ def _minimal_jpeg() -> bytes:
 
 def _valid_wire_frame() -> dict[str, Any]:
     jpeg = _minimal_jpeg()
-    frame = {
+    frame: dict[str, str | np.ndarray | bytes] = {
         OBS_JOINT_POSITION_KEY: np.zeros(DEFAULT_HARDWARE_MODEL.state_dim, dtype=np.float32),
         PROMPT_KEY: "test",
         MODEL_ID_KEY: "",
@@ -159,7 +157,7 @@ def test_warmup_swallows_connection_errors() -> None:
 
 def test_validate_wire_inference_request_frame_rejects_hardware_model_field() -> None:
     jpeg = _minimal_jpeg()
-    frame = {
+    frame: dict[str, str | np.ndarray | bytes] = {
         "hardware_model": "gen2",
         OBS_JOINT_POSITION_KEY: np.zeros(DEFAULT_HARDWARE_MODEL.state_dim, dtype=np.float32),
         PROMPT_KEY: "test",
@@ -170,18 +168,3 @@ def test_validate_wire_inference_request_frame_rejects_hardware_model_field() ->
 
     with pytest.raises(AssertionError, match="wire inference keys"):
         validate_wire_inference_request_frame(frame)
-
-
-def test_wire_joint_position_array_accepts_hardware_model_string() -> None:
-    joint = wire_joint_position_array(np.zeros(DEFAULT_HARDWARE_MODEL.state_dim, dtype=np.float32), "gen2")
-    assert joint.shape == (DEFAULT_HARDWARE_MODEL.state_dim,)
-
-
-def test_wire_joint_position_array_accepts_explicit_hardware_model_enum() -> None:
-    joint = wire_joint_position_array(np.zeros(DEFAULT_HARDWARE_MODEL.state_dim, dtype=np.float32), HardwareModel.GEN2)
-    assert joint.shape == (DEFAULT_HARDWARE_MODEL.state_dim,)
-
-
-def test_wire_joint_position_array_rejects_invalid_hardware_model() -> None:
-    with pytest.raises(ValueError):
-        wire_joint_position_array(np.zeros(DEFAULT_HARDWARE_MODEL.state_dim, dtype=np.float32), "gen3")

@@ -96,18 +96,16 @@ def _summarize_response_payload(result: dict[str, Any]) -> str:
     return ", ".join(parts)
 
 
-def wire_joint_position_array(
-    value: Any,
+def _validate_joint_position_array(
+    value: np.ndarray,
     hardware_model: str | HardwareModel = DEFAULT_HARDWARE_MODEL,
-) -> npt.NDArray[np.float32]:
+) -> None:
     hm = HardwareModel(hardware_model)
     assert isinstance(value, np.ndarray), f"{OBS_JOINT_POSITION_KEY} must be ndarray"
-    joint = np.asarray(value, dtype=np.float32)
-    assert joint.ndim == 1, f"{OBS_JOINT_POSITION_KEY} must be 1-D, got shape {joint.shape}"
-    assert joint.shape == (hm.state_dim,), (
-        f"{hm.value} {OBS_JOINT_POSITION_KEY} must be ({hm.state_dim},), got {joint.shape}"
+    assert value.ndim == 1, f"{OBS_JOINT_POSITION_KEY} must be 1-D, got shape {value.shape}"
+    assert value.shape == (hm.state_dim,), (
+        f"{hm.value} {OBS_JOINT_POSITION_KEY} must be ({hm.state_dim},), got {value.shape}"
     )
-    return joint
 
 
 def wire_inference_request_keys(*, hardware_model: HardwareModel = DEFAULT_HARDWARE_MODEL) -> frozenset[str]:
@@ -151,14 +149,13 @@ def validate_ultra_arrays_for_hardware_model(
 def validate_wire_inference_request_frame(
     frame: dict[str, Any], hardware_model: HardwareModel = DEFAULT_HARDWARE_MODEL
 ) -> HardwareModel:
-    assert isinstance(frame, dict), f"wire frame must be dict, got {type(frame)}"
     assert ENDPOINT_KEY not in frame, "inference frame must not contain endpoint"
     allowed = wire_inference_request_keys(hardware_model=hardware_model)
     keys = set(frame.keys())
     assert keys == allowed, f"wire inference keys {keys} != expected {allowed}"
     assert isinstance(frame[PROMPT_KEY], str), f"{PROMPT_KEY} must be str"
     assert isinstance(frame[MODEL_ID_KEY], str), f"{MODEL_ID_KEY} must be str"
-    _ = wire_joint_position_array(frame[OBS_JOINT_POSITION_KEY], hardware_model)
+    _validate_joint_position_array(frame[OBS_JOINT_POSITION_KEY], hardware_model)
     for k in _observation_keys(hardware_model):
         v = frame[k]
         assert isinstance(v, (bytes, np.ndarray)), f"{k} must be jpeg bytes or ndarray, got {type(v)}"
@@ -169,10 +166,6 @@ def validate_wire_inference_response(
     result: dict[str, Any],
     hardware_model: HardwareModel = DEFAULT_HARDWARE_MODEL,
 ) -> None:
-    assert isinstance(hardware_model, HardwareModel), (
-        f"hardware_model must be HardwareModel, got {type(hardware_model)}"
-    )
-    assert isinstance(result, dict), f"response must be dict, got {type(result)}"
     response_summary = _summarize_response_payload(result)
     assert "error" not in result, f"unexpected error payload: {response_summary}"
     allowed = frozenset({ACTIONS_KEY, INFERENCE_TIME_KEY, "policy_id"})
@@ -199,6 +192,5 @@ __all__ = [
     "validate_ultra_arrays_for_hardware_model",
     "validate_wire_inference_request_frame",
     "validate_wire_inference_response",
-    "wire_joint_position_array",
     "wire_inference_request_keys",
 ]
