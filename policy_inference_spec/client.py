@@ -20,7 +20,7 @@ from policy_inference_spec.client_helpers import (
     _wire_camera_names,
     policy_ws_url,
 )
-from policy_inference_spec.protocol import chw_from_wire_image, encode_ndarray, msgpack_decode, msgpack_encode
+from policy_inference_spec.protocol import encode_ndarray, hwc_from_wire_image, msgpack_decode, msgpack_encode
 from policy_inference_spec.schema import (
     DEFAULT_HARDWARE_MODEL,
     HardwareModel,
@@ -106,8 +106,8 @@ class RemotePolicyClient:
         for key, value in wire_frame.items():
             if not key.startswith("observation/") or key == KEY_OBS_JOINT_POSITION:
                 continue
-            chw = chw_from_wire_image(value, (3, target_h, target_w))
-            field = encode_ndarray(chw, jpeg_quality=75)
+            hwc = hwc_from_wire_image(value, (target_h, target_w, 3))
+            field = encode_ndarray(hwc, jpeg_quality=75)
             assert field.codec == "jpeg", f"{key} must use jpeg transport"
             adapted[key] = field.data
         return adapted

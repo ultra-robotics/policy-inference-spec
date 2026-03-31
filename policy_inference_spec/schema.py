@@ -7,7 +7,7 @@ from typing import Any
 import numpy as np
 import numpy.typing as npt
 
-KEY_OBS_JOINT_POSITION = "observation/joint_position"
+KEY_OBS_JOINT_POSITION = "observation/joint_position"  # State vector (Actually contains more than just qpos)
 KEY_PROMPT = "prompt"
 KEY_ACTIONS = "actions"
 KEY_INFERENCE_TIME = "inference_time"
@@ -22,9 +22,7 @@ class _HardwareModelSpec:
     state_dim: int
     action_dim: int
     image_resolution: tuple[int, int]
-    gateway_cameras: tuple[str, ...]
-    ultra_to_gateway_image: dict[str, str]
-    gateway_to_ultra_image: dict[str, str]
+    cameras: tuple[str, ...]
 
 
 class HardwareModel(StrEnum):
@@ -56,37 +54,20 @@ class HardwareModel(StrEnum):
         return _HARDWARE_MODEL_SPECS[self].image_resolution
 
     @property
-    def gateway_cameras(self) -> tuple[str, ...]:
-        return _HARDWARE_MODEL_SPECS[self].gateway_cameras
+    def cameras(self) -> tuple[str, ...]:
+        return _HARDWARE_MODEL_SPECS[self].cameras
 
-    @property
-    def ultra_to_gateway_image(self) -> dict[str, str]:
-        return _HARDWARE_MODEL_SPECS[self].ultra_to_gateway_image.copy()
-
-    @property
-    def gateway_to_ultra_image(self) -> dict[str, str]:
-        return _HARDWARE_MODEL_SPECS[self].gateway_to_ultra_image.copy()
-
-
-_GEN2_ULTRA_TO_GATEWAY_IMAGE = {
-    "observation.images.head": "images/main_image_left",
-    "observation.images.left_wrist": "images/left_wrist_image_left",
-    "observation.images.right_wrist": "images/right_wrist_image_left",
-}
-_GEN2_GATEWAY_TO_ULTRA_IMAGE = {v: k for k, v in _GEN2_ULTRA_TO_GATEWAY_IMAGE.items()}
 
 _HARDWARE_MODEL_SPECS = {
     HardwareModel.GEN2: _HardwareModelSpec(
         state_dim=97,
         action_dim=25,
         image_resolution=(360, 640),
-        gateway_cameras=(
+        cameras=(
             "images/main_image_left",
             "images/left_wrist_image_left",
             "images/right_wrist_image_left",
         ),
-        ultra_to_gateway_image=_GEN2_ULTRA_TO_GATEWAY_IMAGE,
-        gateway_to_ultra_image=_GEN2_GATEWAY_TO_ULTRA_IMAGE,
     ),
 }
 
@@ -94,7 +75,7 @@ DEFAULT_HARDWARE_MODEL = HardwareModel.GEN2
 
 
 def _observation_keys(hardware_model: HardwareModel) -> list[str]:
-    return [f"observation/{cam}" for cam in hardware_model.gateway_cameras]
+    return [f"observation/{cam}" for cam in hardware_model.cameras]
 
 
 def _summarize_response_value(value: Any) -> str:
@@ -148,7 +129,7 @@ def validate_ultra_arrays_for_hardware_model(
     hardware_model: str | HardwareModel = DEFAULT_HARDWARE_MODEL,
 ) -> None:
     hm = HardwareModel(hardware_model)
-    image_keys = set(hm.ultra_to_gateway_image)
+    image_keys = set(_observation_keys(hm))
     keys = set(arrays.keys())
     expected = {"observation.state", *image_keys}
     assert keys == expected, f"{hm.value} request keys {keys} != expected {expected}"
@@ -159,12 +140,12 @@ def validate_ultra_arrays_for_hardware_model(
     )
     for key in image_keys:
         image = arrays[key]
-        assert image.ndim in (3, 4), f"{hm.value} image {key} must be CHW or BCHW, got {image.shape}"
+        assert image.ndim in (3, 4), f"{hm.value} image {key} must be HWC or BHWC, got {image.shape}"
         if image.ndim == 4:
             assert image.shape[0] == 1, f"{hm.value} image {key} batch size must be 1, got {image.shape}"
-            assert image.shape[1] == 3, f"{hm.value} image {key} channel dim must be 3, got {image.shape}"
+            assert image.shape[-1] == 3, f"{hm.value} image {key} channel dim must be 3, got {image.shape}"
             continue
-        assert image.shape[0] == 3, f"{hm.value} image {key} channel dim must be 3, got {image.shape}"
+        assert image.shape[-1] == 3, f"{hm.value} image {key} channel dim must be 3, got {image.shape}"
 
 
 def validate_wire_inference_request_frame(frame: dict[str, Any]) -> HardwareModel:

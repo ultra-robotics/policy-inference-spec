@@ -65,7 +65,10 @@ def _summarize_wire_frame(wire_frame: dict[str, Any]) -> dict[str, str]:
 
 def _summarize_server_payload(payload: Any) -> Any:
     if isinstance(payload, dict):
-        return {str(key): _summarize_server_payload(value) for key, value in sorted(payload.items(), key=lambda item: str(item[0]))}
+        return {
+            str(key): _summarize_server_payload(value)
+            for key, value in sorted(payload.items(), key=lambda item: str(item[0]))
+        }
     if isinstance(payload, list):
         return f"list(len={len(payload)})"
     return _truncate_log_value(payload)
@@ -112,7 +115,7 @@ def _random_warmup_wire_frame(
         KEY_PROMPT: "",
         KEY_MODEL_ID: "",
     }
-    for cam in hm.ultra_to_gateway_image.values():
+    for cam in hm.cameras:
         frame[f"observation/{cam}"] = _random_jpeg_bytes(rng, height, width)
     validate_wire_inference_request_frame(frame)
     return frame

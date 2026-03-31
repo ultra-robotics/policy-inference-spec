@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import numpy as np
 import pytest
 
-from policy_inference_spec.schema import DEFAULT_HARDWARE_MODEL, HardwareModel
+from policy_inference_spec.schema import (
+    DEFAULT_HARDWARE_MODEL,
+    HardwareModel,
+    validate_ultra_arrays_for_hardware_model,
+)
 
 
 def test_str_enum_values() -> None:
@@ -21,32 +26,36 @@ def test_hardware_model_properties() -> None:
     assert DEFAULT_HARDWARE_MODEL.state_dim == 97
     assert DEFAULT_HARDWARE_MODEL.action_dim == 25
     assert DEFAULT_HARDWARE_MODEL.image_resolution == (360, 640)
-    assert DEFAULT_HARDWARE_MODEL.gateway_cameras == (
+    assert DEFAULT_HARDWARE_MODEL.cameras == (
         "images/main_image_left",
         "images/left_wrist_image_left",
         "images/right_wrist_image_left",
     )
-    assert dict(DEFAULT_HARDWARE_MODEL.ultra_to_gateway_image) == {
-        "observation.images.head": "images/main_image_left",
-        "observation.images.left_wrist": "images/left_wrist_image_left",
-        "observation.images.right_wrist": "images/right_wrist_image_left",
+
+
+def test_validate_ultra_arrays_accepts_gateway_camera_names() -> None:
+    image = np.zeros((1, 1, 3), dtype=np.uint8)
+    arrays = {
+        "observation.state": np.zeros((1, DEFAULT_HARDWARE_MODEL.state_dim), dtype=np.float32),
+        "observation/images/main_image_left": image,
+        "observation/images/left_wrist_image_left": image,
+        "observation/images/right_wrist_image_left": image,
     }
-    assert dict(DEFAULT_HARDWARE_MODEL.gateway_to_ultra_image) == {
-        "images/main_image_left": "observation.images.head",
-        "images/left_wrist_image_left": "observation.images.left_wrist",
-        "images/right_wrist_image_left": "observation.images.right_wrist",
+
+    validate_ultra_arrays_for_hardware_model(arrays)
+
+
+def test_validate_ultra_arrays_rejects_legacy_ultra_camera_names() -> None:
+    image = np.zeros((1, 1, 3), dtype=np.uint8)
+    arrays = {
+        "observation.state": np.zeros((1, DEFAULT_HARDWARE_MODEL.state_dim), dtype=np.float32),
+        "observation.images.head": image,
+        "observation.images.left_wrist": image,
+        "observation.images.right_wrist": image,
     }
 
-
-def test_hardware_model_image_maps_are_defensive_copies() -> None:
-    ultra_to_gateway = DEFAULT_HARDWARE_MODEL.ultra_to_gateway_image
-    gateway_to_ultra = DEFAULT_HARDWARE_MODEL.gateway_to_ultra_image
-
-    ultra_to_gateway["extra"] = "mutated"
-    gateway_to_ultra["extra"] = "mutated"
-
-    assert "extra" not in DEFAULT_HARDWARE_MODEL.ultra_to_gateway_image
-    assert "extra" not in DEFAULT_HARDWARE_MODEL.gateway_to_ultra_image
+    with pytest.raises(AssertionError, match="request keys"):
+        validate_ultra_arrays_for_hardware_model(arrays)
 
 
 def test_constructor_rejects_invalid() -> None:

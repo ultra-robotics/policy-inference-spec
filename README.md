@@ -19,7 +19,7 @@ pip install -e .
 - **NumPy:** arrays are encoded with a **`__ndarray__`** tag: `data` (bytes), `dtype`, `shape` (see `policy_inference_spec.protocol`).
 - **Inference request** (msgpack dict): at minimum
   - `observation/joint_position` — float32 **ndarray** joint vector, **1-D** length 97, encoded with `__ndarray__`
-  - `observation/<camera_name>` — JPEG **bytes** (encoded with `encode_ndarray` / decoded with `chw_from_wire_image`)
+  - `observation/<camera_name>` — JPEG **bytes** (encoded with `encode_ndarray` / decoded with `hwc_from_wire_image`)
   - `prompt` — single language string for the policy
   - `model_id` — policy id string (may be empty)
 - **Inference response:** `actions` (2-D ndarray; second dim **25**), `inference_time` (server-side ms), and **`policy_id`** (string).

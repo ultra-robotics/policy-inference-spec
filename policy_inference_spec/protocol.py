@@ -33,27 +33,30 @@ def _resize_hwc_uint8(img: npt.NDArray[np.uint8], height: int, width: int) -> np
     return np.ascontiguousarray(img[y_idx[:, None], x_idx[None, :]]).astype(np.uint8, copy=False)
 
 
-def _chw_to_hwc(arr: npt.NDArray[Any]) -> npt.NDArray[np.uint8]:
+def _as_hwc_uint8(arr: npt.NDArray[Any]) -> npt.NDArray[np.uint8]:
     if arr.ndim == 4:
         assert arr.shape[0] == 1, f"JPEG transport only supports batch size 1, got shape {arr.shape}"
         arr = arr[0]
-    assert arr.ndim == 3, f"JPEG transport expects CHW or BCHW arrays, got shape {arr.shape}"
-    img = np.ascontiguousarray(arr.transpose(1, 2, 0))
+    assert arr.ndim == 3, f"JPEG transport expects HWC or BHWC arrays, got shape {arr.shape}"
+    assert arr.shape[-1] == 3, f"JPEG transport expects channel-last RGB arrays, got shape {arr.shape}"
+    img = np.ascontiguousarray(arr)
     if img.dtype != np.uint8:
         img = np.clip(img, 0, 255).astype(np.uint8)
     return img
 
 
-def _hwc_to_chw(img: npt.NDArray[np.uint8], shape: tuple[int, ...]) -> npt.NDArray[Any]:
+def _hwc_to_array(img: npt.NDArray[np.uint8], shape: tuple[int, ...]) -> npt.NDArray[Any]:
     target_shape = shape[1:] if len(shape) == 4 else shape
-    assert len(target_shape) == 3, f"JPEG transport expects CHW target shape, got {shape}"
-    target_h, target_w = target_shape[1], target_shape[2]
+    assert len(target_shape) == 3, f"JPEG transport expects HWC target shape, got {shape}"
+    target_h, target_w, target_c = target_shape
+    assert target_c == 3, f"JPEG transport expects RGB target shape, got {shape}"
     if img.shape[:2] != (target_h, target_w):
         img = _resize_hwc_uint8(img, target_h, target_w)
-    chw = np.ascontiguousarray(img.transpose(2, 0, 1))
+    assert img.shape[-1] == target_c, f"JPEG transport expects {target_c} channels, got {img.shape}"
+    arr = np.ascontiguousarray(img)
     if len(shape) == 4:
-        return chw[None]
-    return chw
+        return arr[None]
+    return arr
 
 
 def encode_ndarray(arr: npt.NDArray[Any], jpeg_quality: int | None = None, image_scale: float = 1.0) -> NdarrayField:
@@ -64,7 +67,7 @@ def encode_ndarray(arr: npt.NDArray[Any], jpeg_quality: int | None = None, image
             dtype=str(arr.dtype),
         )
 
-    img = _chw_to_hwc(arr)
+    img = _as_hwc_uint8(arr)
     if image_scale != 1.0:
         assert image_scale > 0, f"image_scale must be positive, got {image_scale}"
         scaled_w = max(1, int(round(img.shape[1] * image_scale)))
@@ -82,19 +85,19 @@ def encode_ndarray(arr: npt.NDArray[Any], jpeg_quality: int | None = None, image
 def decode_ndarray(field: NdarrayField) -> npt.NDArray[Any]:
     if field.codec == "jpeg":
         img = simplejpeg.decode_jpeg(field.data)
-        arr = _hwc_to_chw(img, field.shape)
+        arr = _hwc_to_array(img, field.shape)
         return arr.astype(np.dtype(field.dtype), copy=False)
     assert field.codec == "raw", f"Unsupported ndarray codec: {field.codec}"
     return np.frombuffer(field.data, dtype=np.dtype(field.dtype)).reshape(field.shape)
 
 
-def chw_from_wire_image(val: Any, target_shape: tuple[int, ...]) -> npt.NDArray[Any]:
+def hwc_from_wire_image(val: Any, target_shape: tuple[int, ...]) -> npt.NDArray[Any]:
     if isinstance(val, bytes):
         img = simplejpeg.decode_jpeg(val)
-        return _hwc_to_chw(img, target_shape).astype(np.float32, copy=False)
+        return _hwc_to_array(img, target_shape).astype(np.float32, copy=False)
     assert isinstance(val, np.ndarray), f"image value must be bytes or ndarray, got {type(val)}"
-    if val.dtype == np.uint8 and val.ndim == 3:
-        return _hwc_to_chw(val, target_shape).astype(np.float32, copy=False)
+    if val.dtype == np.uint8 and val.ndim in (3, 4):
+        return _hwc_to_array(_as_hwc_uint8(val), target_shape).astype(np.float32, copy=False)
     raise AssertionError(f"unexpected image payload dtype/shape {val.dtype} {val.shape}")
 
 
@@ -132,10 +135,7 @@ def msgpack_encode(obj: Any) -> bytes:
 
 def _walk_decode(obj: Any) -> Any:
     if isinstance(obj, dict):
-        if (
-            NDARRAY_MSGPACK_TAG in obj
-            or NDARRAY_MSGPACK_TAG.encode() in obj
-        ):
+        if NDARRAY_MSGPACK_TAG in obj or NDARRAY_MSGPACK_TAG.encode() in obj:
             return ndarray_from_msgpack_tag(obj)
         normalized: dict[Any, Any] = {}
         for key, value in obj.items():
@@ -160,9 +160,9 @@ __all__ = [
     "InferenceMetadataValue",
     "NDARRAY_MSGPACK_TAG",
     "NdarrayField",
-    "chw_from_wire_image",
     "decode_ndarray",
     "encode_ndarray",
+    "hwc_from_wire_image",
     "msgpack_decode",
     "msgpack_encode",
     "ndarray_from_msgpack_tag",

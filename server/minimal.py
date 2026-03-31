@@ -49,7 +49,7 @@ EXAMPLE_POLICY = ExampleLinearPolicy()
 
 def server_handshake_config() -> dict[str, Any]:
     return {
-        "camera_names": list(DEFAULT_HARDWARE_MODEL.gateway_cameras),
+        "camera_names": list(DEFAULT_HARDWARE_MODEL.cameras),
         "image_resolution": EXAMPLE_IMAGE_RESOLUTION,
         "action_space": "joint_position",
         "needs_wrist_camera": True,

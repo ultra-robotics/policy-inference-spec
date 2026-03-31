@@ -4,7 +4,7 @@ import msgspec
 import numpy as np
 import pytest
 
-from policy_inference_spec.protocol import msgpack_decode, msgpack_encode
+from policy_inference_spec.protocol import NdarrayField, decode_ndarray, encode_ndarray, msgpack_decode, msgpack_encode
 from policy_inference_spec.schema import validate_wire_inference_response
 
 
@@ -56,3 +56,15 @@ def test_validate_wire_inference_response_summarizes_binary_like_payloads() -> N
     assert "summary=" in message
     assert "dict(keys=['__ndarray__', 'data', 'dtype', 'shape'])" in message
     assert "\\x00" not in message
+
+
+def test_jpeg_ndarray_round_trip_preserves_hwc_shape() -> None:
+    expected = np.zeros((1, 12, 16, 3), dtype=np.uint8)
+
+    encoded = encode_ndarray(expected, jpeg_quality=75)
+    decoded = decode_ndarray(encoded)
+
+    assert isinstance(encoded, NdarrayField)
+    assert encoded.codec == "jpeg"
+    assert decoded.shape == expected.shape
+    assert decoded.dtype == expected.dtype
