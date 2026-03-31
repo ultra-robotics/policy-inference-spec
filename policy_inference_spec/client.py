@@ -20,7 +20,7 @@ from policy_inference_spec.client_helpers import (
     _wire_camera_names,
     policy_ws_url,
 )
-from policy_inference_spec.hardware_model import HardwareModel, as_hardware_model
+from policy_inference_spec.hardware_model import HardwareModel
 from policy_inference_spec.protocol import chw_from_wire_image, encode_ndarray, msgpack_decode, msgpack_encode
 from policy_inference_spec.schema import (
     KEY_ACTIONS,
@@ -113,7 +113,7 @@ class RemotePolicyClient:
 
     def warmup(self, *, hardware_model: str | HardwareModel = HardwareModel.GEN2) -> bool:
         try:
-            hm = as_hardware_model(hardware_model)
+            hm = HardwareModel(hardware_model)
             uri = self.predict_url
             with ws_connect_sync(uri, additional_headers=self._headers()) as ws:
                 first = ws.recv()

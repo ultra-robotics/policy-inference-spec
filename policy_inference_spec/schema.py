@@ -5,7 +5,7 @@ from typing import Any
 import numpy as np
 import numpy.typing as npt
 
-from policy_inference_spec.hardware_model import HardwareModel, as_hardware_model
+from policy_inference_spec.hardware_model import HardwareModel
 
 KEY_OBS_JOINT_POSITION = "observation/joint_position"
 KEY_PROMPT = "prompt"
@@ -58,7 +58,7 @@ def _summarize_response_payload(result: dict[str, Any]) -> str:
 
 
 def wire_joint_position_array(value: Any, hardware_model: str | HardwareModel) -> npt.NDArray[np.float32]:
-    hm = assert_supported_hardware_model(hardware_model)
+    hm = HardwareModel(hardware_model)
     assert isinstance(value, np.ndarray), f"{KEY_OBS_JOINT_POSITION} must be ndarray"
     joint = np.asarray(value, dtype=np.float32)
     assert joint.ndim == 1, f"{KEY_OBS_JOINT_POSITION} must be 1-D, got shape {joint.shape}"
@@ -82,15 +82,11 @@ def wire_inference_request_keys(*, hardware_model: HardwareModel) -> frozenset[s
     return base
 
 
-def assert_supported_hardware_model(hardware_model: str | HardwareModel) -> HardwareModel:
-    return as_hardware_model(hardware_model)
-
-
 def validate_ultra_arrays_for_hardware_model(
     arrays: dict[str, npt.NDArray[Any]],
     hardware_model: str | HardwareModel,
 ) -> None:
-    hm = assert_supported_hardware_model(hardware_model)
+    hm = HardwareModel(hardware_model)
     image_keys = set(GEN1_ULTRA_TO_GATEWAY_IMAGE) if hm == HardwareModel.GEN1 else set(GEN2_ULTRA_TO_GATEWAY_IMAGE)
     keys = set(arrays.keys())
     expected = {"observation.state", *image_keys}
@@ -117,7 +113,7 @@ def validate_wire_inference_request_frame(frame: dict[str, Any]) -> HardwareMode
     if hm_raw is None or (isinstance(hm_raw, str) and not hm_raw.strip()):
         hardware_model = HardwareModel.GEN2
     else:
-        hardware_model = as_hardware_model(str(hm_raw).strip())
+        hardware_model = HardwareModel(str(hm_raw).strip())
     allowed = wire_inference_request_keys(hardware_model=hardware_model)
     keys = set(frame.keys())
     assert keys == allowed, f"wire inference keys {keys} != expected {allowed}"
@@ -165,7 +161,6 @@ __all__ = [
     "GEN2_GATEWAY_CAMERAS",
     "GEN2_GATEWAY_TO_ULTRA_IMAGE",
     "GEN2_STATE_DIM",
-    "as_hardware_model",
     "KEY_ACTIONS",
     "KEY_ENDPOINT",
     "KEY_HARDWARE_MODEL",
@@ -174,7 +169,6 @@ __all__ = [
     "KEY_OBS_JOINT_POSITION",
     "KEY_PROMPT",
     "WIRE_ACTION_DIMS_ALLOWED",
-    "assert_supported_hardware_model",
     "validate_ultra_arrays_for_hardware_model",
     "validate_wire_inference_request_frame",
     "validate_wire_inference_response",

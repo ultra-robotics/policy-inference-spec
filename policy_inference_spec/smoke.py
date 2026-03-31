@@ -11,7 +11,7 @@ from policy_inference_spec.client import (
     RemotePolicyClient,
     _random_warmup_wire_frame,
 )
-from policy_inference_spec.hardware_model import as_hardware_model
+from policy_inference_spec.hardware_model import HardwareModel
 
 
 def _parse_args() -> argparse.Namespace:
@@ -41,7 +41,7 @@ async def _run() -> int:
         print("--predicts must be >= 1", file=sys.stderr)
         return 2
 
-    hm = as_hardware_model(args.hardware_model)
+    hm = HardwareModel(args.hardware_model)
     headers = {"x-api-key": args.api_key} if args.api_key else None
     client = RemotePolicyClient(args.url, policy_auth_headers=headers)
 

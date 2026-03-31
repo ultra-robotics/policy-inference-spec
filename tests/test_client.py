@@ -18,11 +18,13 @@ from policy_inference_spec.client import (
 from policy_inference_spec.protocol import msgpack_encode
 from policy_inference_spec.schema import (
     KEY_ACTIONS,
+    KEY_HARDWARE_MODEL,
     KEY_INFERENCE_TIME,
     KEY_MODEL_ID,
     KEY_OBS_JOINT_POSITION,
     KEY_PROMPT,
     validate_wire_inference_request_frame,
+    wire_joint_position_array,
 )
 
 
@@ -152,3 +154,24 @@ def test_warmup_swallows_connection_errors() -> None:
         m.side_effect = OSError("no server")
         client = RemotePolicyClient("ws://127.0.0.1:9/ws")
         assert client.warmup() is False
+
+
+def test_validate_wire_inference_request_frame_raises_value_error_for_invalid_hardware_model() -> None:
+    jpeg = _minimal_jpeg()
+    frame = {
+        KEY_HARDWARE_MODEL: "gen3",
+        KEY_OBS_JOINT_POSITION: np.zeros(89, dtype=np.float32),
+        "observation/images/main_image_left": jpeg,
+        "observation/images/left_wrist_image_left": jpeg,
+        "observation/images/right_wrist_image_left": jpeg,
+        KEY_PROMPT: "test",
+        KEY_MODEL_ID: "",
+    }
+
+    with pytest.raises(ValueError):
+        validate_wire_inference_request_frame(frame)
+
+
+def test_wire_joint_position_array_raises_value_error_for_invalid_hardware_model() -> None:
+    with pytest.raises(ValueError):
+        wire_joint_position_array(np.zeros(89, dtype=np.float32), "gen3")
