@@ -35,7 +35,7 @@ def _minimal_jpeg() -> bytes:
 def _valid_gen2_wire_frame() -> dict[str, Any]:
     jpeg = _minimal_jpeg()
     frame = {
-        KEY_OBS_JOINT_POSITION: np.zeros(89, dtype=np.float32),
+        KEY_OBS_JOINT_POSITION: np.zeros(97, dtype=np.float32),
         "observation/images/main_image_left": jpeg,
         "observation/images/left_wrist_image_left": jpeg,
         "observation/images/right_wrist_image_left": jpeg,
@@ -105,8 +105,7 @@ async def test_predict_round_trip_with_mock_websocket() -> None:
 async def test_predict_rejects_invalid_response() -> None:
     cfg = msgpack_encode({})
     bad_actions = np.zeros((1, 7), dtype=np.float32)
-    resp = msgpack_encode({KEY_ACTIONS: bad_actions, KEY_INFERENCE_TIME: 1.0,
-                           "policy_id": ""})
+    resp = msgpack_encode({KEY_ACTIONS: bad_actions, KEY_INFERENCE_TIME: 1.0, "policy_id": ""})
     ws_mock = MagicMock()
     ws_mock.recv = AsyncMock(side_effect=[cfg, resp])
     ws_mock.send = AsyncMock()
@@ -160,7 +159,7 @@ def test_validate_wire_inference_request_frame_raises_value_error_for_invalid_ha
     jpeg = _minimal_jpeg()
     frame = {
         KEY_HARDWARE_MODEL: "gen3",
-        KEY_OBS_JOINT_POSITION: np.zeros(89, dtype=np.float32),
+        KEY_OBS_JOINT_POSITION: np.zeros(97, dtype=np.float32),
         "observation/images/main_image_left": jpeg,
         "observation/images/left_wrist_image_left": jpeg,
         "observation/images/right_wrist_image_left": jpeg,
@@ -174,4 +173,4 @@ def test_validate_wire_inference_request_frame_raises_value_error_for_invalid_ha
 
 def test_wire_joint_position_array_raises_value_error_for_invalid_hardware_model() -> None:
     with pytest.raises(ValueError):
-        wire_joint_position_array(np.zeros(89, dtype=np.float32), "gen3")
+        wire_joint_position_array(np.zeros(97, dtype=np.float32), "gen3")

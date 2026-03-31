@@ -32,9 +32,9 @@ EXAMPLE_ACTION_DIM = 25
 class ExampleLinearPolicy(torch.nn.Module):
     def __init__(self) -> None:
         super().__init__()
-        self.linear = torch.nn.Linear(89, EXAMPLE_ACTION_DIM)
+        self.linear = torch.nn.Linear(97, EXAMPLE_ACTION_DIM)
         with torch.no_grad():
-            weight = torch.arange(EXAMPLE_ACTION_DIM * 89, dtype=torch.float32).reshape(EXAMPLE_ACTION_DIM, 89)
+            weight = torch.arange(EXAMPLE_ACTION_DIM * 97, dtype=torch.float32).reshape(EXAMPLE_ACTION_DIM, 97)
             self.linear.weight.copy_(weight / 1000.0)
             self.linear.bias.copy_(torch.arange(EXAMPLE_ACTION_DIM, dtype=torch.float32) / 100.0)
 
@@ -60,7 +60,7 @@ def example_policy_actions(
     *,
     horizon: int = DEFAULT_ACTION_HORIZON,
 ) -> np.ndarray:
-    assert joint_position.shape == (89,), f"joint_position must have shape (89,), got {joint_position.shape}"
+    assert joint_position.shape == (97,), f"joint_position must have shape (97,), got {joint_position.shape}"
     with torch.no_grad():
         joint_tensor = torch.from_numpy(joint_position.astype(np.float32, copy=True))
         action = EXAMPLE_POLICY(joint_tensor).cpu().numpy().astype(np.float32, copy=False)
