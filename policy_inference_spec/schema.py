@@ -34,7 +34,7 @@ GEN1_ULTRA_TO_GATEWAY_IMAGE = {
 GEN1_GATEWAY_TO_ULTRA_IMAGE = {v: k for k, v in GEN1_ULTRA_TO_GATEWAY_IMAGE.items()}
 
 GEN1_STATE_DIM = 60
-GEN2_STATE_DIM = 89
+GEN2_STATE_DIM = 97
 WIRE_ACTION_DIMS_ALLOWED = frozenset({22, 25})
 
 
@@ -53,7 +53,10 @@ def _summarize_response_value(value: Any) -> str:
 
 
 def _summarize_response_payload(result: dict[str, Any]) -> str:
-    parts = [f"{key}={_summarize_response_value(value)}" for key, value in sorted(result.items(), key=lambda item: str(item[0]))]
+    parts = [
+        f"{key}={_summarize_response_value(value)}"
+        for key, value in sorted(result.items(), key=lambda item: str(item[0]))
+    ]
     return ", ".join(parts)
 
 
@@ -133,12 +136,12 @@ def validate_wire_inference_response(result: dict[str, Any]) -> None:
     response_summary = _summarize_response_payload(result)
     assert "error" not in result, f"unexpected error payload: {response_summary}"
     allowed = frozenset({KEY_ACTIONS, KEY_INFERENCE_TIME, "policy_id"})
-    assert set(result.keys()) <= allowed, f"response keys {set(result.keys())} not subset of {allowed}; summary={response_summary}"
+    assert set(result.keys()) <= allowed, (
+        f"response keys {set(result.keys())} not subset of {allowed}; summary={response_summary}"
+    )
     assert KEY_ACTIONS in result, f"response missing actions; summary={response_summary}"
     actions = result[KEY_ACTIONS]
-    assert isinstance(actions, np.ndarray), (
-        f"actions must be ndarray, got {type(actions)}; summary={response_summary}"
-    )
+    assert isinstance(actions, np.ndarray), f"actions must be ndarray, got {type(actions)}; summary={response_summary}"
     assert actions.ndim == 2, f"actions must be 2-D, got shape {actions.shape}"
     assert actions.shape[1] in WIRE_ACTION_DIMS_ALLOWED, (
         f"actions second dim must be one of {sorted(WIRE_ACTION_DIMS_ALLOWED)}, got {actions.shape}"

@@ -18,7 +18,7 @@ pip install -e .
 - **Auth:** clients that need an API key send header **`x-api-key`**.
 - **NumPy:** arrays are encoded with a **`__ndarray__`** tag: `data` (bytes), `dtype`, `shape` (see `policy_inference_spec.protocol`).
 - **Inference request** (msgpack dict): at minimum
-  - `observation/joint_position` — float32 **ndarray** joint vector, **1-D** length 60 (gen1) or 89 (gen2), encoded with `__ndarray__`
+  - `observation/joint_position` — float32 **ndarray** joint vector, **1-D** length 60 (gen1) or 97 (gen2), encoded with `__ndarray__`
   - `observation/<camera_name>` — JPEG **bytes** (encoded with `encode_ndarray` / decoded with `chw_from_wire_image`)
   - `prompt` — single language string for the policy
   - `model_id` — policy id string (may be empty)
