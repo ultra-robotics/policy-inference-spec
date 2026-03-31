@@ -18,7 +18,7 @@ from policy_inference_spec.constants import (
     OBS_JOINT_POSITION_KEY,
     PROMPT_KEY,
 )
-from policy_inference_spec.protocol import msgpack_decode, msgpack_encode
+from policy_inference_spec.protocol import deserialize_from_msgpack, serialize_to_msgpack
 from policy_inference_spec.hardware_model import (
     DEFAULT_HARDWARE_MODEL,
     validate_wire_inference_request_frame,
@@ -89,24 +89,24 @@ def _inference_response(frame: dict[str, Any]) -> dict[str, Any]:
 
 async def handle_inference_connection(connection: ServerConnection) -> None:
     cfg = server_handshake_config()
-    await connection.send(msgpack_encode(cfg))
+    await connection.send(serialize_to_msgpack(cfg))
     async for message in connection:
         assert isinstance(message, bytes), type(message)
-        frame = msgpack_decode(message)
+        frame = deserialize_from_msgpack(message)
         if not isinstance(frame, dict):
-            await connection.send(msgpack_encode({"error": "expected dict frame"}))
+            await connection.send(serialize_to_msgpack({"error": "expected dict frame"}))
             continue
         if frame.get(ENDPOINT_KEY) == ENDPOINT_RESET:
-            await connection.send(msgpack_encode({"status": "ok"}))
+            await connection.send(serialize_to_msgpack({"status": "ok"}))
             continue
         if frame.get(ENDPOINT_KEY) == ENDPOINT_TELEMETRY:
-            await connection.send(msgpack_encode({"status": "ok"}))
+            await connection.send(serialize_to_msgpack({"status": "ok"}))
             continue
         validate_wire_inference_request_frame(frame)
         _ = frame[PROMPT_KEY]
         _ = frame[MODEL_ID_KEY]
         resp = _inference_response(frame)
-        await connection.send(msgpack_encode(resp))
+        await connection.send(serialize_to_msgpack(resp))
 
 
 @asynccontextmanager

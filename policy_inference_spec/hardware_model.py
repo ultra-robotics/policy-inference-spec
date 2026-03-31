@@ -108,7 +108,7 @@ def _validate_joint_position_array(
     )
 
 
-def wire_inference_request_keys(*, hardware_model: HardwareModel = DEFAULT_HARDWARE_MODEL) -> frozenset[str]:
+def _wire_inference_request_keys(*, hardware_model: HardwareModel = DEFAULT_HARDWARE_MODEL) -> frozenset[str]:
     assert isinstance(hardware_model, HardwareModel), (
         f"hardware_model must be HardwareModel, got {type(hardware_model)}"
     )
@@ -150,7 +150,7 @@ def validate_wire_inference_request_frame(
     frame: dict[str, Any], hardware_model: HardwareModel = DEFAULT_HARDWARE_MODEL
 ) -> HardwareModel:
     assert ENDPOINT_KEY not in frame, "inference frame must not contain endpoint"
-    allowed = wire_inference_request_keys(hardware_model=hardware_model)
+    allowed = _wire_inference_request_keys(hardware_model=hardware_model)
     keys = set(frame.keys())
     assert keys == allowed, f"wire inference keys {keys} != expected {allowed}"
     assert isinstance(frame[PROMPT_KEY], str), f"{PROMPT_KEY} must be str"
@@ -192,5 +192,4 @@ __all__ = [
     "validate_ultra_arrays_for_hardware_model",
     "validate_wire_inference_request_frame",
     "validate_wire_inference_response",
-    "wire_inference_request_keys",
 ]

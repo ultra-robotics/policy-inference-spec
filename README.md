@@ -16,10 +16,10 @@ pip install -e .
 - **Transport:** WebSocket, binary frames, **msgpack** payloads.
 - **Handshake:** client connects to `wss://<host>/ws` (or `ws://`). The server sends the **first** message: a **ServerConfig** dict (camera names, image resolution, action space, etc.).
 - **Auth:** clients that need an API key send header **`x-api-key`**.
-- **NumPy:** arrays are encoded with a **`__ndarray__`** tag: `data` (bytes), `dtype`, `shape` (see `policy_inference_spec.protocol`).
+- **NumPy:** arrays are encoded with a **`__ndarray__`** tag: `data` (bytes), `dtype`, `shape` (see `serialize_to_msgpack` / `deserialize_from_msgpack` in `policy_inference_spec.protocol`).
 - **Inference request** (msgpack dict): at minimum
   - `observation/joint_position` — float32 **ndarray** joint vector, **1-D** length 97, encoded with `__ndarray__`
-  - `observation/<camera_name>` — JPEG **bytes** (encoded with `encode_ndarray` / decoded with `hwc_from_wire_image`)
+  - `observation/<camera_name>` — JPEG **bytes** (produced with `encode_image`)
   - `prompt` — single language string for the policy
   - `model_id` — policy id string (may be empty)
 - **Inference response:** `actions` (2-D ndarray; second dim **25**), `inference_time` (server-side ms), and **`policy_id`** (string).
@@ -38,7 +38,7 @@ Wire and endpoint constants live in `policy_inference_spec.constants`.
 | Module | Role |
 |--------|------|
 | `constants.py` | Shared wire keys, endpoint names, and default server port |
-| `protocol.py` | msgpack encode/decode, `__ndarray__`, `NdarrayField`, JPEG/raw image helpers |
+| `protocol.py` | `encode_image`, `serialize_to_msgpack`, `deserialize_from_msgpack`, and ndarray msgpack tagging |
 | `hardware_model.py` | Hardware-model-aware shapes and strict request/response validation |
 | `client.py` | `RemotePolicyClient` (async transport + validation), `policy_ws_url`, warmup |
 

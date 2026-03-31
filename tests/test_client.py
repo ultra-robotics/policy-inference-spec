@@ -22,7 +22,7 @@ from policy_inference_spec.client import (
     RemotePolicyClient,
     policy_ws_url,
 )
-from policy_inference_spec.protocol import msgpack_encode
+from policy_inference_spec.protocol import serialize_to_msgpack
 from policy_inference_spec.hardware_model import (
     DEFAULT_HARDWARE_MODEL,
     validate_wire_inference_request_frame,
@@ -70,9 +70,9 @@ def test_default_predict_url_is_ws() -> None:
 
 @pytest.mark.asyncio
 async def test_predict_round_trip_with_mock_websocket() -> None:
-    cfg = msgpack_encode({"camera_names": [DEFAULT_HARDWARE_MODEL.cameras[0]]})
+    cfg = serialize_to_msgpack({"camera_names": [DEFAULT_HARDWARE_MODEL.cameras[0]]})
     actions = np.zeros((4, DEFAULT_HARDWARE_MODEL.action_dim), dtype=np.float32)
-    resp = msgpack_encode(
+    resp = serialize_to_msgpack(
         {
             ACTIONS_KEY: actions,
             INFERENCE_TIME_KEY: 3.5,
@@ -103,9 +103,9 @@ async def test_predict_round_trip_with_mock_websocket() -> None:
 
 @pytest.mark.asyncio
 async def test_predict_rejects_invalid_response() -> None:
-    cfg = msgpack_encode({})
+    cfg = serialize_to_msgpack({})
     bad_actions = np.zeros((1, 7), dtype=np.float32)
-    resp = msgpack_encode({ACTIONS_KEY: bad_actions, INFERENCE_TIME_KEY: 1.0, "policy_id": ""})
+    resp = serialize_to_msgpack({ACTIONS_KEY: bad_actions, INFERENCE_TIME_KEY: 1.0, "policy_id": ""})
     ws_mock = MagicMock()
     ws_mock.recv = AsyncMock(side_effect=[cfg, resp])
     ws_mock.send = AsyncMock()
@@ -124,7 +124,7 @@ async def test_predict_rejects_invalid_response() -> None:
 
 @pytest.mark.asyncio
 async def test_predict_raises_clear_restart_signal_on_service_restart() -> None:
-    cfg = msgpack_encode({"camera_names": [DEFAULT_HARDWARE_MODEL.cameras[0]]})
+    cfg = serialize_to_msgpack({"camera_names": [DEFAULT_HARDWARE_MODEL.cameras[0]]})
     ws_mock = MagicMock()
     ws_mock.recv = AsyncMock(side_effect=[cfg])
     ws_mock.send = AsyncMock(

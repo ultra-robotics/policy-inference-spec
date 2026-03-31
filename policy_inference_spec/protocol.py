@@ -8,9 +8,14 @@ import numpy as np
 import numpy.typing as npt
 import simplejpeg
 
-InferenceMetadataValue: TypeAlias = str | int | float | bool | None
+InferenceMetadataValue: TypeAlias = str | int | float | bool | list[str] | list[int]
+ImageArray: TypeAlias = npt.NDArray[np.uint8]
+FloatArray: TypeAlias = npt.NDArray[np.float32]
+ProtocolValue: TypeAlias = ImageArray | FloatArray | bytes | InferenceMetadataValue
+ProtocolPayload: TypeAlias = dict[str, ProtocolValue]
 
 NDARRAY_MSGPACK_TAG = "__ndarray__"
+_SUPPORTED_NDARRAY_DTYPES = frozenset({np.dtype(np.uint8), np.dtype(np.float32)})
 
 
 class NdarrayField(msgspec.Struct):
@@ -20,97 +25,43 @@ class NdarrayField(msgspec.Struct):
     codec: str = "raw"
 
 
-def _resize_hwc_uint8(img: npt.NDArray[np.uint8], height: int, width: int) -> npt.NDArray[np.uint8]:
-    h, w = img.shape[:2]
+def _resize_hwc_uint8(image: ImageArray, height: int, width: int) -> ImageArray:
+    h, w = image.shape[:2]
     if (h, w) == (height, width):
-        return img
+        return image
     resize = getattr(cv2, "resize", None)
     inter_area = getattr(cv2, "INTER_AREA", 1)
     if resize is not None:
-        return np.ascontiguousarray(resize(img, (width, height), interpolation=inter_area)).astype(np.uint8, copy=False)
+        return np.ascontiguousarray(resize(image, (width, height), interpolation=inter_area)).astype(
+            np.uint8, copy=False
+        )
     y_idx = np.linspace(0, h - 1, height, dtype=np.intp)
     x_idx = np.linspace(0, w - 1, width, dtype=np.intp)
-    return np.ascontiguousarray(img[y_idx[:, None], x_idx[None, :]]).astype(np.uint8, copy=False)
+    return np.ascontiguousarray(image[y_idx[:, None], x_idx[None, :]]).astype(np.uint8, copy=False)
 
 
-def _as_hwc_uint8(arr: npt.NDArray[Any]) -> npt.NDArray[np.uint8]:
-    if arr.ndim == 4:
-        assert arr.shape[0] == 1, f"JPEG transport only supports batch size 1, got shape {arr.shape}"
-        arr = arr[0]
-    assert arr.ndim == 3, f"JPEG transport expects HWC or BHWC arrays, got shape {arr.shape}"
-    assert arr.shape[-1] == 3, f"JPEG transport expects channel-last RGB arrays, got shape {arr.shape}"
-    img = np.ascontiguousarray(arr)
-    if img.dtype != np.uint8:
-        img = np.clip(img, 0, 255).astype(np.uint8)
-    return img
+def _as_hwc_uint8(image: npt.NDArray[np.uint8]) -> ImageArray:
+    if image.ndim == 4:
+        assert image.shape[0] == 1, f"JPEG transport only supports batch size 1, got shape {image.shape}"
+        image = image[0]
+    assert image.ndim == 3, f"JPEG transport expects HWC or BHWC arrays, got shape {image.shape}"
+    assert image.shape[-1] == 3, f"JPEG transport expects channel-last RGB arrays, got shape {image.shape}"
+    assert image.dtype == np.uint8, f"JPEG transport expects uint8 arrays, got {image.dtype}"
+    return np.ascontiguousarray(image)
 
 
-def _hwc_to_array(img: npt.NDArray[np.uint8], shape: tuple[int, ...]) -> npt.NDArray[Any]:
-    target_shape = shape[1:] if len(shape) == 4 else shape
-    assert len(target_shape) == 3, f"JPEG transport expects HWC target shape, got {shape}"
-    target_h, target_w, target_c = target_shape
-    assert target_c == 3, f"JPEG transport expects RGB target shape, got {shape}"
-    if img.shape[:2] != (target_h, target_w):
-        img = _resize_hwc_uint8(img, target_h, target_w)
-    assert img.shape[-1] == target_c, f"JPEG transport expects {target_c} channels, got {img.shape}"
-    arr = np.ascontiguousarray(img)
-    if len(shape) == 4:
-        return arr[None]
-    return arr
-
-
-def encode_ndarray(arr: npt.NDArray[Any], jpeg_quality: int | None = None, image_scale: float = 1.0) -> NdarrayField:
-    if jpeg_quality is None:
-        return NdarrayField(
-            data=arr.tobytes(),
-            shape=arr.shape,
-            dtype=str(arr.dtype),
-        )
-
-    img = _as_hwc_uint8(arr)
-    if image_scale != 1.0:
-        assert image_scale > 0, f"image_scale must be positive, got {image_scale}"
-        scaled_w = max(1, int(round(img.shape[1] * image_scale)))
-        scaled_h = max(1, int(round(img.shape[0] * image_scale)))
-        img = _resize_hwc_uint8(img, scaled_h, scaled_w)
-
-    return NdarrayField(
-        data=simplejpeg.encode_jpeg(img, quality=jpeg_quality),
-        shape=arr.shape,
-        dtype=str(arr.dtype),
-        codec="jpeg",
-    )
-
-
-def decode_ndarray(field: NdarrayField) -> npt.NDArray[Any]:
-    if field.codec == "jpeg":
-        img = simplejpeg.decode_jpeg(field.data)
-        arr = _hwc_to_array(img, field.shape)
-        return arr.astype(np.dtype(field.dtype), copy=False)
-    assert field.codec == "raw", f"Unsupported ndarray codec: {field.codec}"
-    return np.frombuffer(field.data, dtype=np.dtype(field.dtype)).reshape(field.shape)
-
-
-def hwc_from_wire_image(val: Any, target_shape: tuple[int, ...]) -> npt.NDArray[Any]:
-    if isinstance(val, bytes):
-        img = simplejpeg.decode_jpeg(val)
-        return _hwc_to_array(img, target_shape).astype(np.float32, copy=False)
-    assert isinstance(val, np.ndarray), f"image value must be bytes or ndarray, got {type(val)}"
-    if val.dtype == np.uint8 and val.ndim in (3, 4):
-        return _hwc_to_array(_as_hwc_uint8(val), target_shape).astype(np.float32, copy=False)
-    raise AssertionError(f"unexpected image payload dtype/shape {val.dtype} {val.shape}")
-
-
-def ndarray_to_msgpack_tag(arr: npt.NDArray[Any]) -> dict[str, Any]:
+def _ndarray_to_msgpack_tag(array: npt.NDArray[Any]) -> dict[str, Any]:
+    dtype = np.dtype(array.dtype)
+    assert dtype in _SUPPORTED_NDARRAY_DTYPES, f"Unsupported ndarray dtype for msgpack transport: {dtype}"
     return {
         NDARRAY_MSGPACK_TAG: True,
-        "data": arr.tobytes(),
-        "dtype": str(arr.dtype),
-        "shape": list(arr.shape),
+        "data": array.tobytes(),
+        "dtype": str(dtype),
+        "shape": list(array.shape),
     }
 
 
-def ndarray_from_msgpack_tag(obj: Any) -> npt.NDArray[Any]:
+def _ndarray_from_msgpack_tag(obj: Any) -> npt.NDArray[Any]:
     assert isinstance(obj, dict), f"expected ndarray tag dict, got {type(obj)}"
     tag = obj.get(NDARRAY_MSGPACK_TAG)
     if tag is None:
@@ -118,25 +69,24 @@ def ndarray_from_msgpack_tag(obj: Any) -> npt.NDArray[Any]:
     assert tag is True, f"invalid ndarray tag keys={sorted(repr(key) for key in obj)}"
     data = obj["data"] if "data" in obj else obj[b"data"]
     dtype = np.dtype(obj["dtype"] if "dtype" in obj else obj[b"dtype"])
+    assert dtype in _SUPPORTED_NDARRAY_DTYPES, f"Unsupported ndarray dtype for msgpack transport: {dtype}"
     shape = tuple(obj["shape"] if "shape" in obj else obj[b"shape"])
     return np.frombuffer(data, dtype=dtype).reshape(shape)
 
 
 def _msgpack_ndarray_encode_hook(obj: Any) -> Any:
     if isinstance(obj, np.ndarray):
-        return ndarray_to_msgpack_tag(obj)
+        return _ndarray_to_msgpack_tag(obj)
     raise TypeError(f"Cannot encode type: {type(obj)!r}")
 
 
-def msgpack_encode(obj: Any) -> bytes:
-    enc = msgspec.msgpack.Encoder(enc_hook=_msgpack_ndarray_encode_hook)
-    return enc.encode(obj)
+_MSGPACK_ENCODER = msgspec.msgpack.Encoder(enc_hook=_msgpack_ndarray_encode_hook)
 
 
 def _walk_decode(obj: Any) -> Any:
     if isinstance(obj, dict):
         if NDARRAY_MSGPACK_TAG in obj or NDARRAY_MSGPACK_TAG.encode() in obj:
-            return ndarray_from_msgpack_tag(obj)
+            return _ndarray_from_msgpack_tag(obj)
         normalized: dict[Any, Any] = {}
         for key, value in obj.items():
             if isinstance(key, bytes):
@@ -147,24 +97,48 @@ def _walk_decode(obj: Any) -> Any:
             normalized[key] = _walk_decode(value)
         return normalized
     if isinstance(obj, list):
-        return [_walk_decode(x) for x in obj]
+        return [_walk_decode(item) for item in obj]
     return obj
 
 
-def msgpack_decode(data: bytes) -> Any:
-    raw = msgspec.msgpack.decode(data)
-    return _walk_decode(raw)
+def encode_image(
+    image: npt.NDArray[np.uint8],
+    height: int,
+    width: int,
+    jpeg_quality: int = 75,
+) -> NdarrayField:
+    assert height > 0, f"height must be positive, got {height}"
+    assert width > 0, f"width must be positive, got {width}"
+    assert 0 < jpeg_quality <= 100, f"jpeg_quality must be in [1, 100], got {jpeg_quality}"
+    normalized = _as_hwc_uint8(image)
+    resized = _resize_hwc_uint8(normalized, height, width)
+    return NdarrayField(
+        data=simplejpeg.encode_jpeg(resized, quality=jpeg_quality),
+        shape=image.shape,
+        dtype=str(image.dtype),
+        codec="jpeg",
+    )
+
+
+def serialize_to_msgpack(data: ProtocolPayload) -> bytes:
+    return _MSGPACK_ENCODER.encode(data)
+
+
+def deserialize_from_msgpack(data: bytes) -> ProtocolPayload:
+    decoded = _walk_decode(msgspec.msgpack.decode(data))
+    assert isinstance(decoded, dict), f"expected msgpack root dict, got {type(decoded)}"
+    return decoded
 
 
 __all__ = [
+    "FloatArray",
+    "ImageArray",
     "InferenceMetadataValue",
     "NDARRAY_MSGPACK_TAG",
     "NdarrayField",
-    "decode_ndarray",
-    "encode_ndarray",
-    "hwc_from_wire_image",
-    "msgpack_decode",
-    "msgpack_encode",
-    "ndarray_from_msgpack_tag",
-    "ndarray_to_msgpack_tag",
+    "ProtocolPayload",
+    "ProtocolValue",
+    "deserialize_from_msgpack",
+    "encode_image",
+    "serialize_to_msgpack",
 ]
