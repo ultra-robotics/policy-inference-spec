@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from policy_inference_spec.client import RemotePolicyClient, _random_warmup_wire_frame
-from policy_inference_spec.constants import OBS_JOINT_POSITION_KEY
+from policy_inference_spec.constants import JOINT_STATE_KEY
 from server.minimal import EXAMPLE_POLICY_ID, example_policy_actions, run_example_server, server_handshake_config
 
 pytestmark = pytest.mark.asyncio
@@ -21,7 +21,7 @@ async def test_client_predict_against_example_server() -> None:
                 "image_resolution": [360, 640],
             }
 
-    expected = example_policy_actions(frame[OBS_JOINT_POSITION_KEY])
+    expected = example_policy_actions(frame[JOINT_STATE_KEY])
     assert pred.actions_d.shape == expected.shape
     assert pred.actions_d.dtype == np.float32
     assert np.allclose(pred.actions_d, expected)

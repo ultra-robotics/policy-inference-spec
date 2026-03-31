@@ -18,11 +18,11 @@ pip install -e .
 - **Auth:** clients that need an API key send header **`x-api-key`**.
 - **NumPy:** arrays are encoded with a **`__ndarray__`** tag: `data` (bytes), `dtype`, `shape` (see `serialize_to_msgpack` / `deserialize_from_msgpack` in `policy_inference_spec.protocol`).
 - **Inference request** (msgpack dict): at minimum
-  - `observation/joint_position` — float32 **ndarray** joint vector, **1-D** length 97, encoded with `__ndarray__`
+  - `observation/state` — float32 **ndarray** joint/state vector, **1-D** length 97, encoded with `__ndarray__`
   - `observation/<camera_name>` — JPEG **bytes** (produced with `encode_image`)
   - `prompt` — single language string for the policy
   - `model_id` — policy id string (may be empty)
-- **Inference response:** `actions` (2-D ndarray; second dim **25**), `inference_time` (server-side ms), and **`policy_id`** (string).
+- **Inference response:** `action` (2-D ndarray; second dim **25**), `inference_time` (server-side ms), and **`policy_id`** (string).
 - **Control:** `{"endpoint": "reset"}` → `{"status": "ok"}`; `{"endpoint": "telemetry", ...}` → `{"status": "ok"}`.
 
 Strict validation helpers live in `policy_inference_spec.hardware_model` (`validate_wire_inference_request_frame`, `validate_wire_inference_response`).

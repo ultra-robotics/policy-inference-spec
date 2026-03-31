@@ -9,13 +9,13 @@ import websockets
 from websockets.asyncio.server import ServerConnection
 
 from policy_inference_spec.constants import (
-    ACTIONS_KEY,
+    ACTION_KEY,
     ENDPOINT_KEY,
     ENDPOINT_RESET,
     ENDPOINT_TELEMETRY,
     INFERENCE_TIME_KEY,
+    JOINT_STATE_KEY,
     MODEL_ID_KEY,
-    OBS_JOINT_POSITION_KEY,
     PROMPT_KEY,
 )
 from policy_inference_spec.protocol import deserialize_from_msgpack, serialize_to_msgpack
@@ -75,11 +75,11 @@ def example_policy_actions(
 
 
 def _inference_response(frame: dict[str, Any]) -> dict[str, Any]:
-    joint_position = frame[OBS_JOINT_POSITION_KEY]
+    joint_position = frame[JOINT_STATE_KEY]
     assert isinstance(joint_position, np.ndarray), type(joint_position)
     actions = example_policy_actions(joint_position)
     resp = {
-        ACTIONS_KEY: actions,
+        ACTION_KEY: actions,
         INFERENCE_TIME_KEY: 0.25,
         "policy_id": EXAMPLE_POLICY_ID,
     }

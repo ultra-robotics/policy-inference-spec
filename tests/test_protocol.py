@@ -21,20 +21,20 @@ from policy_inference_spec.hardware_model import validate_wire_inference_respons
 
 def test_serialize_to_msgpack_uses_flat_ndarray_tags() -> None:
     expected = cast(FloatArray, np.arange(6, dtype=np.float32).reshape(2, 3))
-    payload: ProtocolPayload = {"actions": expected}
+    payload: ProtocolPayload = {"action": expected}
     encoded = serialize_to_msgpack(payload)
     raw = msgspec.msgpack.decode(encoded)
 
-    assert raw["actions"]["__ndarray__"] is True
-    assert raw["actions"]["dtype"] == "float32"
-    assert raw["actions"]["shape"] == [2, 3]
-    assert isinstance(raw["actions"]["data"], bytes)
+    assert raw["action"]["__ndarray__"] is True
+    assert raw["action"]["dtype"] == "float32"
+    assert raw["action"]["shape"] == [2, 3]
+    assert isinstance(raw["action"]["data"], bytes)
 
 
 def test_deserialize_from_msgpack_accepts_flat_byte_key_ndarray_tags() -> None:
     expected = cast(FloatArray, np.arange(6, dtype=np.float32).reshape(2, 3))
     payload = {
-        "actions": {
+        "action": {
             b"__ndarray__": True,
             b"data": expected.tobytes(),
             b"dtype": "float32",
@@ -44,14 +44,14 @@ def test_deserialize_from_msgpack_accepts_flat_byte_key_ndarray_tags() -> None:
 
     decoded = deserialize_from_msgpack(msgspec.msgpack.encode(payload))
 
-    assert isinstance(decoded["actions"], np.ndarray)
-    assert decoded["actions"].dtype == np.float32
-    assert decoded["actions"].shape == (2, 3)
-    assert np.array_equal(decoded["actions"], expected)
+    assert isinstance(decoded["action"], np.ndarray)
+    assert decoded["action"].dtype == np.float32
+    assert decoded["action"].shape == (2, 3)
+    assert np.array_equal(decoded["action"], expected)
 
 
 def test_serialize_to_msgpack_rejects_float64_ndarray() -> None:
-    payload: Any = {"actions": np.arange(6, dtype=np.float64).reshape(2, 3)}
+    payload: Any = {"action": np.arange(6, dtype=np.float64).reshape(2, 3)}
 
     with pytest.raises(BeartypeCallHintParamViolation):
         serialize_to_msgpack(cast(Any, payload))
@@ -59,7 +59,7 @@ def test_serialize_to_msgpack_rejects_float64_ndarray() -> None:
 
 def test_deserialize_from_msgpack_rejects_float64_ndarray_tag() -> None:
     payload = {
-        "actions": {
+        "action": {
             b"__ndarray__": True,
             b"data": np.arange(6, dtype=np.float64).reshape(2, 3).tobytes(),
             b"dtype": "float64",
@@ -75,7 +75,7 @@ def test_validate_wire_inference_response_summarizes_binary_like_payloads() -> N
     with pytest.raises(AssertionError) as exc_info:
         validate_wire_inference_response(
             {
-                "actions": {
+                "action": {
                     "__ndarray__": True,
                     "data": b"\x00" * 32,
                     "dtype": "float64",

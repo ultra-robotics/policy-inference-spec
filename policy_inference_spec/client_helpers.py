@@ -10,8 +10,8 @@ import simplejpeg
 
 from policy_inference_spec.constants import (
     DEFAULT_INFERENCE_SERVER_PORT,
+    JOINT_STATE_KEY,
     MODEL_ID_KEY,
-    OBS_JOINT_POSITION_KEY,
     PROMPT_KEY,
 )
 from policy_inference_spec.hardware_model import (
@@ -40,7 +40,7 @@ def _log_server_config(server_config: dict[str, Any]) -> None:
 def _wire_camera_names(wire_frame: dict[str, Any]) -> list[str]:
     camera_names: list[str] = []
     for key in wire_frame:
-        if not key.startswith("observation/") or key == OBS_JOINT_POSITION_KEY:
+        if not key.startswith("observation/") or key == JOINT_STATE_KEY:
             continue
         camera_names.append(key.removeprefix("observation/"))
     return sorted(camera_names)
@@ -113,7 +113,7 @@ def _random_warmup_wire_frame(
     height, width = image_resolution or hm.image_resolution
     joint = rng.standard_normal(hm.state_dim, dtype=np.float32)
     frame: dict[str, Any] = {
-        OBS_JOINT_POSITION_KEY: joint,
+        JOINT_STATE_KEY: joint,
         PROMPT_KEY: "",
         MODEL_ID_KEY: "",
     }

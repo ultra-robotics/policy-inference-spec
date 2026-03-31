@@ -8,11 +8,11 @@ import numpy as np
 import numpy.typing as npt
 
 from policy_inference_spec.constants import (
-    ACTIONS_KEY,
+    ACTION_KEY,
     ENDPOINT_KEY,
     INFERENCE_TIME_KEY,
+    JOINT_STATE_KEY,
     MODEL_ID_KEY,
-    OBS_JOINT_POSITION_KEY,
     PROMPT_KEY,
 )
 
@@ -101,10 +101,10 @@ def _validate_joint_position_array(
     hardware_model: str | HardwareModel = DEFAULT_HARDWARE_MODEL,
 ) -> None:
     hm = HardwareModel(hardware_model)
-    assert isinstance(value, np.ndarray), f"{OBS_JOINT_POSITION_KEY} must be ndarray"
-    assert value.ndim == 1, f"{OBS_JOINT_POSITION_KEY} must be 1-D, got shape {value.shape}"
+    assert isinstance(value, np.ndarray), f"{JOINT_STATE_KEY} must be ndarray"
+    assert value.ndim == 1, f"{JOINT_STATE_KEY} must be 1-D, got shape {value.shape}"
     assert value.shape == (hm.state_dim,), (
-        f"{hm.value} {OBS_JOINT_POSITION_KEY} must be ({hm.state_dim},), got {value.shape}"
+        f"{hm.value} {JOINT_STATE_KEY} must be ({hm.state_dim},), got {value.shape}"
     )
 
 
@@ -114,7 +114,7 @@ def _wire_inference_request_keys(*, hardware_model: HardwareModel = DEFAULT_HARD
     )
     return frozenset(
         {
-            OBS_JOINT_POSITION_KEY,
+            JOINT_STATE_KEY,
             *_observation_keys(hardware_model),
             PROMPT_KEY,
             MODEL_ID_KEY,
@@ -129,12 +129,12 @@ def validate_ultra_arrays_for_hardware_model(
     hm = HardwareModel(hardware_model)
     image_keys = set(_observation_keys(hm))
     keys = set(arrays.keys())
-    expected = {OBS_JOINT_POSITION_KEY, *image_keys}
+    expected = {JOINT_STATE_KEY, *image_keys}
     assert keys == expected, f"{hm.value} request keys {keys} != expected {expected}"
-    joint_position = arrays[OBS_JOINT_POSITION_KEY]
+    joint_position = arrays[JOINT_STATE_KEY]
     expected_joint_position_shape = (1, hm.state_dim)
     assert joint_position.shape == expected_joint_position_shape, (
-        f"{hm.value} {OBS_JOINT_POSITION_KEY} shape {joint_position.shape} != {expected_joint_position_shape}"
+        f"{hm.value} {JOINT_STATE_KEY} shape {joint_position.shape} != {expected_joint_position_shape}"
     )
     for key in image_keys:
         image = arrays[key]
@@ -155,7 +155,7 @@ def validate_wire_inference_request_frame(
     assert keys == allowed, f"wire inference keys {keys} != expected {allowed}"
     assert isinstance(frame[PROMPT_KEY], str), f"{PROMPT_KEY} must be str"
     assert isinstance(frame[MODEL_ID_KEY], str), f"{MODEL_ID_KEY} must be str"
-    _validate_joint_position_array(frame[OBS_JOINT_POSITION_KEY], hardware_model)
+    _validate_joint_position_array(frame[JOINT_STATE_KEY], hardware_model)
     for k in _observation_keys(hardware_model):
         v = frame[k]
         assert isinstance(v, (bytes, np.ndarray)), f"{k} must be jpeg bytes or ndarray, got {type(v)}"
@@ -168,18 +168,18 @@ def validate_wire_inference_response(
 ) -> None:
     response_summary = _summarize_response_payload(result)
     assert "error" not in result, f"unexpected error payload: {response_summary}"
-    allowed = frozenset({ACTIONS_KEY, INFERENCE_TIME_KEY, "policy_id"})
+    allowed = frozenset({ACTION_KEY, INFERENCE_TIME_KEY, "policy_id"})
     assert set(result.keys()) <= allowed, (
         f"response keys {set(result.keys())} not subset of {allowed}; summary={response_summary}"
     )
-    assert ACTIONS_KEY in result, f"response missing actions; summary={response_summary}"
-    actions = result[ACTIONS_KEY]
-    assert isinstance(actions, np.ndarray), f"actions must be ndarray, got {type(actions)}; summary={response_summary}"
-    assert actions.ndim == 2, f"actions must be 2-D, got shape {actions.shape}"
+    assert ACTION_KEY in result, f"response missing action; summary={response_summary}"
+    actions = result[ACTION_KEY]
+    assert isinstance(actions, np.ndarray), f"action must be ndarray, got {type(actions)}; summary={response_summary}"
+    assert actions.ndim == 2, f"action must be 2-D, got shape {actions.shape}"
     assert actions.shape[1] == hardware_model.action_dim, (
-        f"actions second dim must be {hardware_model.action_dim}, got {actions.shape}"
+        f"action second dim must be {hardware_model.action_dim}, got {actions.shape}"
     )
-    assert np.issubdtype(actions.dtype, np.floating), f"actions must be floating ndarray, got {actions.dtype}"
+    assert np.issubdtype(actions.dtype, np.floating), f"action must be floating ndarray, got {actions.dtype}"
     if INFERENCE_TIME_KEY in result:
         assert isinstance(result[INFERENCE_TIME_KEY], (int, float)), "inference_time must be numeric"
     if "policy_id" in result:

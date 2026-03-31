@@ -22,9 +22,9 @@ from policy_inference_spec.client_helpers import (
     policy_ws_url,
 )
 from policy_inference_spec.constants import (
-    ACTIONS_KEY,
+    ACTION_KEY,
     INFERENCE_TIME_KEY,
-    OBS_JOINT_POSITION_KEY,
+    JOINT_STATE_KEY,
 )
 from policy_inference_spec.protocol import deserialize_from_msgpack, encode_image, serialize_to_msgpack
 from policy_inference_spec.hardware_model import (
@@ -120,7 +120,7 @@ class RemotePolicyClient:
         target_h, target_w = image_resolution
         adapted = dict(wire_frame)
         for key, value in wire_frame.items():
-            if not key.startswith("observation/") or key == OBS_JOINT_POSITION_KEY:
+            if not key.startswith("observation/") or key == JOINT_STATE_KEY:
                 continue
             field = encode_image(_wire_image_to_hwc_uint8(value), target_h, target_w, jpeg_quality=75)
             assert field.codec == "jpeg", f"{key} must use jpeg transport"
@@ -252,7 +252,7 @@ class RemotePolicyClient:
         except AssertionError as exc:
             LOGGER.error("Malformed inference response: %s", _summarize_server_payload(result))
             raise AssertionError(f"{exc}") from exc
-        actions = result[ACTIONS_KEY]
+        actions = result[ACTION_KEY]
         infer_raw = result.get(INFERENCE_TIME_KEY)
         server_latency_ms = 0.0
         if infer_raw is not None:

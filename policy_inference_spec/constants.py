@@ -1,7 +1,7 @@
 DEFAULT_INFERENCE_SERVER_PORT = 18090
-OBS_JOINT_POSITION_KEY = "observation/joint_position"  # State vector (Actually contains more than just qpos)
+JOINT_STATE_KEY = "observation/state"  # State vector (Actually contains more than just qpos)
 PROMPT_KEY = "prompt"
-ACTIONS_KEY = "actions"
+ACTION_KEY = "action"
 INFERENCE_TIME_KEY = "inference_time"
 ENDPOINT_KEY = "endpoint"
 ENDPOINT_RESET = "reset"

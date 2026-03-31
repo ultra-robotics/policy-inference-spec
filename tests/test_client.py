@@ -10,10 +10,10 @@ from websockets.exceptions import ConnectionClosedError
 from websockets.frames import Close
 
 from policy_inference_spec.constants import (
-    ACTIONS_KEY,
+    ACTION_KEY,
     INFERENCE_TIME_KEY,
+    JOINT_STATE_KEY,
     MODEL_ID_KEY,
-    OBS_JOINT_POSITION_KEY,
     PROMPT_KEY,
 )
 from policy_inference_spec.client import (
@@ -36,7 +36,7 @@ def _minimal_jpeg() -> bytes:
 def _valid_wire_frame() -> dict[str, Any]:
     jpeg = _minimal_jpeg()
     frame: dict[str, str | np.ndarray | bytes] = {
-        OBS_JOINT_POSITION_KEY: np.zeros(DEFAULT_HARDWARE_MODEL.state_dim, dtype=np.float32),
+        JOINT_STATE_KEY: np.zeros(DEFAULT_HARDWARE_MODEL.state_dim, dtype=np.float32),
         PROMPT_KEY: "test",
         MODEL_ID_KEY: "",
     }
@@ -74,7 +74,7 @@ async def test_predict_round_trip_with_mock_websocket() -> None:
     actions = np.zeros((4, DEFAULT_HARDWARE_MODEL.action_dim), dtype=np.float32)
     resp = serialize_to_msgpack(
         {
-            ACTIONS_KEY: actions,
+            ACTION_KEY: actions,
             INFERENCE_TIME_KEY: 3.5,
             "policy_id": "policy-1",
         }
@@ -105,7 +105,7 @@ async def test_predict_round_trip_with_mock_websocket() -> None:
 async def test_predict_rejects_invalid_response() -> None:
     cfg = serialize_to_msgpack({})
     bad_actions = np.zeros((1, 7), dtype=np.float32)
-    resp = serialize_to_msgpack({ACTIONS_KEY: bad_actions, INFERENCE_TIME_KEY: 1.0, "policy_id": ""})
+    resp = serialize_to_msgpack({ACTION_KEY: bad_actions, INFERENCE_TIME_KEY: 1.0, "policy_id": ""})
     ws_mock = MagicMock()
     ws_mock.recv = AsyncMock(side_effect=[cfg, resp])
     ws_mock.send = AsyncMock()
@@ -159,7 +159,7 @@ def test_validate_wire_inference_request_frame_rejects_hardware_model_field() ->
     jpeg = _minimal_jpeg()
     frame: dict[str, str | np.ndarray | bytes] = {
         "hardware_model": "gen2",
-        OBS_JOINT_POSITION_KEY: np.zeros(DEFAULT_HARDWARE_MODEL.state_dim, dtype=np.float32),
+        JOINT_STATE_KEY: np.zeros(DEFAULT_HARDWARE_MODEL.state_dim, dtype=np.float32),
         PROMPT_KEY: "test",
         MODEL_ID_KEY: "",
     }
