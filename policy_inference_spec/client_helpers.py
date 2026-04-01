@@ -6,13 +6,11 @@ from typing import Any
 from urllib.parse import urlparse
 
 import numpy as np
-import simplejpeg  # type: ignore[import-untyped]
 
 from policy_inference_spec.protocol import DEFAULT_INFERENCE_SERVER_PORT, JOINT_STATE_KEY, MODEL_ID_KEY, PROMPT_KEY, ServerHandshake
 from policy_inference_spec.hardware_model import (
     DEFAULT_HARDWARE_MODEL,
     HardwareModel,
-    validate_wire_inference_request_frame,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -81,28 +79,3 @@ def _emit_server_error_verbatim(payload: Any) -> None:
 
 def _server_image_resolution(server_config: ServerHandshake | None) -> tuple[int, int] | None:
     return None if server_config is None else server_config.image_resolution
-
-
-def _random_jpeg_bytes(rng: np.random.Generator, h: int, w: int) -> bytes:
-    rgb = rng.integers(0, 256, size=(h, w, 3), dtype=np.uint8)
-    return simplejpeg.encode_jpeg(rgb, quality=75)
-
-
-def _random_warmup_wire_frame(
-    hardware_model: str | HardwareModel = DEFAULT_HARDWARE_MODEL,
-    *,
-    image_resolution: tuple[int, int] | None = None,
-) -> dict[str, Any]:
-    hm = HardwareModel(hardware_model)
-    rng = np.random.default_rng()
-    height, width = image_resolution or hm.image_resolution
-    joint = rng.standard_normal(hm.state_dim, dtype=np.float32)
-    frame: dict[str, Any] = {
-        JOINT_STATE_KEY: joint,
-        PROMPT_KEY: "",
-        MODEL_ID_KEY: "",
-    }
-    for cam in hm.cameras:
-        frame[f"observation/{cam}"] = _random_jpeg_bytes(rng, height, width)
-    validate_wire_inference_request_frame(frame)
-    return frame

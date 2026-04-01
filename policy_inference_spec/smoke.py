@@ -8,16 +8,31 @@ import sys
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
-from policy_inference_spec.client import (
-    RemotePolicyClient,
-    _random_warmup_wire_frame,
-)
+import numpy as np
+import simplejpeg  # type: ignore[import-untyped]
+
+from policy_inference_spec.client import RemotePolicyClient
 from policy_inference_spec.hardware_model import DEFAULT_HARDWARE_MODEL
+from policy_inference_spec.protocol import JOINT_STATE_KEY, MODEL_ID_KEY, PROMPT_KEY
 from server.minimal import run_example_server
 
 
+def _random_predict_frame() -> dict[str, object]:
+    rng = np.random.default_rng()
+    height, width = DEFAULT_HARDWARE_MODEL.image_resolution
+    frame: dict[str, object] = {
+        JOINT_STATE_KEY: rng.standard_normal(DEFAULT_HARDWARE_MODEL.state_dim, dtype=np.float32),
+        PROMPT_KEY: "",
+        MODEL_ID_KEY: "",
+    }
+    for cam in DEFAULT_HARDWARE_MODEL.cameras:
+        rgb = rng.integers(0, 256, size=(height, width, 3), dtype=np.uint8)
+        frame[f"observation/{cam}"] = simplejpeg.encode_jpeg(rgb, quality=75)
+    return frame
+
+
 def _parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Warmup + predict smoke test against a policy inference WebSocket server.")
+    p = argparse.ArgumentParser(description="Predict smoke test against a policy inference WebSocket server.")
     p.add_argument(
         "--url",
         default=os.environ.get("POLICY_SERVER_URL"),
@@ -28,7 +43,7 @@ def _parse_args() -> argparse.Namespace:
         type=int,
         default=2,
         metavar="N",
-        help="Number of predict requests after warmup (default: 2)",
+        help="Number of predict requests to send (default: 2)",
     )
     p.add_argument("--api-key", default=os.environ.get("POLICY_AUTH_TOKEN"), help="Optional x-api-key header")
     p.add_argument("-v", "--verbose", action="store_true")
@@ -56,13 +71,9 @@ async def _run() -> int:
         client = RemotePolicyClient(predict_url, policy_auth_headers=headers)
 
         print(f"URL {predict_url!r} hardware_model={DEFAULT_HARDWARE_MODEL.value}", flush=True)
-        if not await asyncio.to_thread(client.warmup):
-            print("Warmup failed.", file=sys.stderr)
-            return 1
-
         async with client:
             for i in range(args.predicts):
-                frame = _random_warmup_wire_frame()
+                frame = _random_predict_frame()
                 pred = await client.predict(frame)
                 print(
                     f"predict {i + 1}/{args.predicts}: "
