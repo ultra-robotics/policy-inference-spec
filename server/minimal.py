@@ -1,28 +1,37 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator
+from typing import Any, AsyncIterator, Iterable
 
 import numpy as np
 import torch
 import websockets
 from websockets.asyncio.server import ServerConnection
 
-from policy_inference_spec.constants import (
+from policy_inference_spec.codec import deserialize_from_msgpack, serialize_to_msgpack
+from policy_inference_spec.hardware_model import (
+    DEFAULT_HARDWARE_MODEL,
+    server_handshake_for_hardware_model,
+    validate_wire_inference_request_frame,
+    validate_wire_inference_response,
+)
+from policy_inference_spec.protocol import (
     ACTION_KEY,
     ENDPOINT_KEY,
     ENDPOINT_RESET,
+    ENDPOINT_REWARD,
     ENDPOINT_TELEMETRY,
     INFERENCE_TIME_KEY,
     JOINT_STATE_KEY,
     MODEL_ID_KEY,
+    POLICY_ID_KEY,
     PROMPT_KEY,
-)
-from policy_inference_spec.protocol import deserialize_from_msgpack, serialize_to_msgpack
-from policy_inference_spec.hardware_model import (
-    DEFAULT_HARDWARE_MODEL,
-    validate_wire_inference_request_frame,
-    validate_wire_inference_response,
+    REWARD_DESCRIPTION_KEY,
+    REWARD_KEY,
+    STATUS_KEY,
+    RewardSignal,
+    ServerFeature,
+    ServerHandshake,
 )
 
 DEFAULT_ACTION_HORIZON = 4
@@ -50,14 +59,14 @@ class ExampleLinearPolicy(torch.nn.Module):
 EXAMPLE_POLICY = ExampleLinearPolicy()
 
 
-def server_handshake_config() -> dict[str, Any]:
-    return {
-        "camera_names": list(DEFAULT_HARDWARE_MODEL.cameras),
-        "image_resolution": EXAMPLE_IMAGE_RESOLUTION,
-        "action_space": "joint_position",
-        "needs_wrist_camera": True,
-        "n_external_cameras": 1,
-    }
+def server_handshake_config(
+    *, server_features: Iterable[str | ServerFeature] = ()
+) -> ServerHandshake:
+    return server_handshake_for_hardware_model(
+        DEFAULT_HARDWARE_MODEL,
+        include_image_resolution=True,
+        server_features=server_features,
+    )
 
 
 def example_policy_actions(
@@ -81,15 +90,19 @@ def _inference_response(frame: dict[str, Any]) -> dict[str, Any]:
     resp = {
         ACTION_KEY: actions,
         INFERENCE_TIME_KEY: 0.25,
-        "policy_id": EXAMPLE_POLICY_ID,
+        POLICY_ID_KEY: EXAMPLE_POLICY_ID,
     }
     validate_wire_inference_response(resp)
     return resp
 
 
-async def handle_inference_connection(connection: ServerConnection) -> None:
-    cfg = server_handshake_config()
-    await connection.send(serialize_to_msgpack(cfg))
+async def handle_inference_connection(
+    connection: ServerConnection,
+    *,
+    server_features: Iterable[str | ServerFeature] = (),
+) -> None:
+    cfg = server_handshake_config(server_features=server_features)
+    await connection.send(serialize_to_msgpack(cfg.to_payload()))
     async for message in connection:
         assert isinstance(message, bytes), type(message)
         frame = deserialize_from_msgpack(message)
@@ -102,6 +115,23 @@ async def handle_inference_connection(connection: ServerConnection) -> None:
         if frame.get(ENDPOINT_KEY) == ENDPOINT_TELEMETRY:
             await connection.send(serialize_to_msgpack({"status": "ok"}))
             continue
+        if frame.get(ENDPOINT_KEY) == ENDPOINT_REWARD:
+            reward_signal = RewardSignal.from_payload(frame)
+            await connection.send(
+                serialize_to_msgpack(
+                    {
+                        ENDPOINT_KEY: ENDPOINT_REWARD,
+                        STATUS_KEY: "ok",
+                        REWARD_KEY: reward_signal.reward,
+                        **(
+                            {REWARD_DESCRIPTION_KEY: reward_signal.description}
+                            if reward_signal.description is not None
+                            else {}
+                        ),
+                    }
+                )
+            )
+            continue
         validate_wire_inference_request_frame(frame)
         _ = frame[PROMPT_KEY]
         _ = frame[MODEL_ID_KEY]
@@ -110,9 +140,11 @@ async def handle_inference_connection(connection: ServerConnection) -> None:
 
 
 @asynccontextmanager
-async def run_example_server() -> AsyncIterator[str]:
+async def run_example_server(
+    *, server_features: Iterable[str | ServerFeature] = (ServerFeature.REWARDS,)
+) -> AsyncIterator[str]:
     async def handler(connection: ServerConnection) -> None:
-        await handle_inference_connection(connection)
+        await handle_inference_connection(connection, server_features=server_features)
 
     async with websockets.serve(handler, "127.0.0.1", 0) as server:
         sock = next(iter(server.sockets))

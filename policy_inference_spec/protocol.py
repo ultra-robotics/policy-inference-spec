@@ -1,12 +1,36 @@
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
+from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any, TypeAlias
 
-import cv2
-import msgspec
 import numpy as np
 import numpy.typing as npt
-import simplejpeg
+
+DEFAULT_INFERENCE_SERVER_PORT = 18090
+
+JOINT_STATE_KEY = "observation/state"
+PROMPT_KEY = "prompt"
+ACTION_KEY = "action"
+INFERENCE_TIME_KEY = "inference_time"
+ENDPOINT_KEY = "endpoint"
+ENDPOINT_RESET = "reset"
+ENDPOINT_TELEMETRY = "telemetry"
+ENDPOINT_REWARD = "reward"
+MODEL_ID_KEY = "model_id"
+POLICY_ID_KEY = "policy_id"
+REWARD_KEY = "reward"
+REWARD_DESCRIPTION_KEY = "description"
+
+CAMERA_NAMES_KEY = "camera_names"
+IMAGE_RESOLUTION_KEY = "image_resolution"
+ACTION_SPACE_KEY = "action_space"
+NEEDS_WRIST_CAMERA_KEY = "needs_wrist_camera"
+N_EXTERNAL_CAMERAS_KEY = "n_external_cameras"
+SERVER_FEATURES_KEY = "server_features"
+STATUS_KEY = "status"
+ERROR_KEY = "error"
 
 InferenceMetadataValue: TypeAlias = str | int | float | bool | list[str] | list[int]
 ImageArray: TypeAlias = npt.NDArray[np.uint8]
@@ -14,131 +38,169 @@ FloatArray: TypeAlias = npt.NDArray[np.float32]
 ProtocolValue: TypeAlias = ImageArray | FloatArray | bytes | InferenceMetadataValue
 ProtocolPayload: TypeAlias = dict[str, ProtocolValue]
 
-NDARRAY_MSGPACK_TAG = "__ndarray__"
-_SUPPORTED_NDARRAY_DTYPES = frozenset({np.dtype(np.uint8), np.dtype(np.float32)})
+
+class ServerFeature(StrEnum):
+    REWARDS = "rewards"
 
 
-class NdarrayField(msgspec.Struct):
-    data: bytes
-    shape: tuple[int, ...]
-    dtype: str = "float32"
-    codec: str = "raw"
+def _normalize_server_features(features: Iterable[str | ServerFeature]) -> tuple[str, ...]:
+    normalized = tuple(str(feature) for feature in features)
+    assert all(feature for feature in normalized), "server_features must not contain empty strings"
+    return normalized
 
 
-def _resize_hwc_uint8(image: ImageArray, height: int, width: int) -> ImageArray:
-    h, w = image.shape[:2]
-    if (h, w) == (height, width):
-        return image
-    resize = getattr(cv2, "resize", None)
-    inter_area = getattr(cv2, "INTER_AREA", 1)
-    if resize is not None:
-        return np.ascontiguousarray(resize(image, (width, height), interpolation=inter_area)).astype(
-            np.uint8, copy=False
+def _parse_optional_image_resolution(raw: Any) -> tuple[int, int] | None:
+    if raw is None:
+        return None
+    assert isinstance(raw, (list, tuple)) and len(raw) == 2, f"{IMAGE_RESOLUTION_KEY} must be a 2-item list or tuple"
+    assert all(isinstance(dim, (int, float)) for dim in raw), f"{IMAGE_RESOLUTION_KEY} dims must be numeric"
+    height, width = int(raw[0]), int(raw[1])
+    assert height > 0 and width > 0, f"{IMAGE_RESOLUTION_KEY} dims must be positive, got {(height, width)}"
+    return height, width
+
+
+@dataclass(frozen=True)
+class ServerHandshake:
+    camera_names: tuple[str, ...]
+    image_resolution: tuple[int, int] | None = None
+    action_space: str = "joint_position"
+    needs_wrist_camera: bool = True
+    n_external_cameras: int = 1
+    server_features: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        assert self.camera_names, "camera_names must not be empty"
+        assert all(isinstance(name, str) and name for name in self.camera_names), "camera_names must be non-empty strings"
+        assert isinstance(self.action_space, str) and self.action_space, "action_space must be a non-empty string"
+        assert isinstance(self.needs_wrist_camera, bool), "needs_wrist_camera must be bool"
+        assert isinstance(self.n_external_cameras, int), "n_external_cameras must be int"
+        assert self.n_external_cameras >= 0, "n_external_cameras must be non-negative"
+        assert all(isinstance(feature, str) and feature for feature in self.server_features), (
+            "server_features must be non-empty strings"
         )
-    y_idx = np.linspace(0, h - 1, height, dtype=np.intp)
-    x_idx = np.linspace(0, w - 1, width, dtype=np.intp)
-    return np.ascontiguousarray(image[y_idx[:, None], x_idx[None, :]]).astype(np.uint8, copy=False)
+
+    def supports(self, feature: str | ServerFeature) -> bool:
+        return str(feature) in self.server_features
+
+    def to_payload(self) -> ProtocolPayload:
+        payload: ProtocolPayload = {
+            CAMERA_NAMES_KEY: list(self.camera_names),
+            ACTION_SPACE_KEY: self.action_space,
+            NEEDS_WRIST_CAMERA_KEY: self.needs_wrist_camera,
+            N_EXTERNAL_CAMERAS_KEY: self.n_external_cameras,
+        }
+        if self.image_resolution is not None:
+            payload[IMAGE_RESOLUTION_KEY] = list(self.image_resolution)
+        if self.server_features:
+            payload[SERVER_FEATURES_KEY] = list(self.server_features)
+        return payload
+
+    @classmethod
+    def from_payload(cls, payload: Mapping[str, Any]) -> ServerHandshake:
+        assert isinstance(payload, Mapping), f"handshake payload must be mapping, got {type(payload)}"
+        camera_names_raw = payload.get(CAMERA_NAMES_KEY)
+        assert isinstance(camera_names_raw, list), f"{CAMERA_NAMES_KEY} must be list[str]"
+        assert all(isinstance(name, str) for name in camera_names_raw), f"{CAMERA_NAMES_KEY} must be list[str]"
+        image_resolution = _parse_optional_image_resolution(payload.get(IMAGE_RESOLUTION_KEY))
+        action_space = payload.get(ACTION_SPACE_KEY, "joint_position")
+        assert isinstance(action_space, str), f"{ACTION_SPACE_KEY} must be str"
+        needs_wrist_camera = payload.get(NEEDS_WRIST_CAMERA_KEY, True)
+        assert isinstance(needs_wrist_camera, bool), f"{NEEDS_WRIST_CAMERA_KEY} must be bool"
+        n_external_cameras = payload.get(N_EXTERNAL_CAMERAS_KEY, 1)
+        assert isinstance(n_external_cameras, int), f"{N_EXTERNAL_CAMERAS_KEY} must be int"
+        server_features_raw = payload.get(SERVER_FEATURES_KEY, [])
+        assert isinstance(server_features_raw, list), f"{SERVER_FEATURES_KEY} must be list[str]"
+        assert all(isinstance(feature, str) for feature in server_features_raw), f"{SERVER_FEATURES_KEY} must be list[str]"
+        return cls(
+            camera_names=tuple(camera_names_raw),
+            image_resolution=image_resolution,
+            action_space=action_space,
+            needs_wrist_camera=needs_wrist_camera,
+            n_external_cameras=n_external_cameras,
+            server_features=_normalize_server_features(server_features_raw),
+        )
 
 
-def _as_hwc_uint8(image: npt.NDArray[np.uint8]) -> ImageArray:
-    if image.ndim == 4:
-        assert image.shape[0] == 1, f"JPEG transport only supports batch size 1, got shape {image.shape}"
-        image = image[0]
-    assert image.ndim == 3, f"JPEG transport expects HWC or BHWC arrays, got shape {image.shape}"
-    assert image.shape[-1] == 3, f"JPEG transport expects channel-last RGB arrays, got shape {image.shape}"
-    assert image.dtype == np.uint8, f"JPEG transport expects uint8 arrays, got {image.dtype}"
-    return np.ascontiguousarray(image)
-
-
-def _ndarray_to_msgpack_tag(array: npt.NDArray[Any]) -> dict[str, Any]:
-    dtype = np.dtype(array.dtype)
-    assert dtype in _SUPPORTED_NDARRAY_DTYPES, f"Unsupported ndarray dtype for msgpack transport: {dtype}"
-    return {
-        NDARRAY_MSGPACK_TAG: True,
-        "data": array.tobytes(),
-        "dtype": str(dtype),
-        "shape": list(array.shape),
-    }
-
-
-def _ndarray_from_msgpack_tag(obj: Any) -> npt.NDArray[Any]:
-    assert isinstance(obj, dict), f"expected ndarray tag dict, got {type(obj)}"
-    tag = obj.get(NDARRAY_MSGPACK_TAG)
-    if tag is None:
-        tag = obj.get(NDARRAY_MSGPACK_TAG.encode())
-    assert tag is True, f"invalid ndarray tag keys={sorted(repr(key) for key in obj)}"
-    data = obj["data"] if "data" in obj else obj[b"data"]
-    dtype = np.dtype(obj["dtype"] if "dtype" in obj else obj[b"dtype"])
-    assert dtype in _SUPPORTED_NDARRAY_DTYPES, f"Unsupported ndarray dtype for msgpack transport: {dtype}"
-    shape = tuple(obj["shape"] if "shape" in obj else obj[b"shape"])
-    return np.frombuffer(data, dtype=dtype).reshape(shape)
-
-
-def _msgpack_ndarray_encode_hook(obj: Any) -> Any:
-    if isinstance(obj, np.ndarray):
-        return _ndarray_to_msgpack_tag(obj)
-    raise TypeError(f"Cannot encode type: {type(obj)!r}")
-
-
-_MSGPACK_ENCODER = msgspec.msgpack.Encoder(enc_hook=_msgpack_ndarray_encode_hook)
-
-
-def _walk_decode(obj: Any) -> Any:
-    if isinstance(obj, dict):
-        if NDARRAY_MSGPACK_TAG in obj or NDARRAY_MSGPACK_TAG.encode() in obj:
-            return _ndarray_from_msgpack_tag(obj)
-        normalized: dict[Any, Any] = {}
-        for key, value in obj.items():
-            if isinstance(key, bytes):
-                try:
-                    key = key.decode()
-                except UnicodeDecodeError:
-                    pass
-            normalized[key] = _walk_decode(value)
-        return normalized
-    if isinstance(obj, list):
-        return [_walk_decode(item) for item in obj]
-    return obj
-
-
-def encode_image(
-    image: npt.NDArray[np.uint8],
-    height: int,
-    width: int,
-    jpeg_quality: int = 75,
-) -> NdarrayField:
-    assert height > 0, f"height must be positive, got {height}"
-    assert width > 0, f"width must be positive, got {width}"
-    assert 0 < jpeg_quality <= 100, f"jpeg_quality must be in [1, 100], got {jpeg_quality}"
-    normalized = _as_hwc_uint8(image)
-    resized = _resize_hwc_uint8(normalized, height, width)
-    return NdarrayField(
-        data=simplejpeg.encode_jpeg(resized, quality=jpeg_quality),
-        shape=image.shape,
-        dtype=str(image.dtype),
-        codec="jpeg",
+def make_server_handshake(
+    *,
+    camera_names: Iterable[str],
+    image_resolution: tuple[int, int] | None = None,
+    action_space: str = "joint_position",
+    needs_wrist_camera: bool = True,
+    n_external_cameras: int = 1,
+    server_features: Iterable[str | ServerFeature] = (),
+) -> ServerHandshake:
+    return ServerHandshake(
+        camera_names=tuple(camera_names),
+        image_resolution=image_resolution,
+        action_space=action_space,
+        needs_wrist_camera=needs_wrist_camera,
+        n_external_cameras=n_external_cameras,
+        server_features=_normalize_server_features(server_features),
     )
 
 
-def serialize_to_msgpack(data: ProtocolPayload) -> bytes:
-    return _MSGPACK_ENCODER.encode(data)
+@dataclass(frozen=True)
+class RewardSignal:
+    reward: float = 1.0
+    description: str | None = None
 
+    def __post_init__(self) -> None:
+        assert isinstance(self.reward, (int, float)), f"{REWARD_KEY} must be numeric"
+        if self.description is not None:
+            assert isinstance(self.description, str), f"{REWARD_DESCRIPTION_KEY} must be str"
 
-def deserialize_from_msgpack(data: bytes) -> ProtocolPayload:
-    decoded = _walk_decode(msgspec.msgpack.decode(data))
-    assert isinstance(decoded, dict), f"expected msgpack root dict, got {type(decoded)}"
-    return decoded
+    def to_payload(self) -> ProtocolPayload:
+        payload: ProtocolPayload = {
+            ENDPOINT_KEY: ENDPOINT_REWARD,
+            REWARD_KEY: float(self.reward),
+        }
+        if self.description is not None:
+            payload[REWARD_DESCRIPTION_KEY] = self.description
+        return payload
+
+    @classmethod
+    def from_payload(cls, payload: Mapping[str, Any]) -> RewardSignal:
+        assert isinstance(payload, Mapping), f"reward payload must be mapping, got {type(payload)}"
+        assert payload.get(ENDPOINT_KEY) == ENDPOINT_REWARD, (
+            f"{ENDPOINT_KEY} must be {ENDPOINT_REWARD!r}, got {payload.get(ENDPOINT_KEY)!r}"
+        )
+        reward = payload.get(REWARD_KEY, 1.0)
+        assert isinstance(reward, (int, float)), f"{REWARD_KEY} must be numeric"
+        description = payload.get(REWARD_DESCRIPTION_KEY)
+        assert description is None or isinstance(description, str), f"{REWARD_DESCRIPTION_KEY} must be str"
+        return cls(reward=float(reward), description=description)
 
 
 __all__ = [
+    "ACTION_KEY",
+    "ACTION_SPACE_KEY",
+    "CAMERA_NAMES_KEY",
+    "DEFAULT_INFERENCE_SERVER_PORT",
+    "ENDPOINT_KEY",
+    "ENDPOINT_RESET",
+    "ENDPOINT_REWARD",
+    "ENDPOINT_TELEMETRY",
+    "ERROR_KEY",
     "FloatArray",
+    "IMAGE_RESOLUTION_KEY",
     "ImageArray",
+    "INFERENCE_TIME_KEY",
     "InferenceMetadataValue",
-    "NDARRAY_MSGPACK_TAG",
-    "NdarrayField",
+    "JOINT_STATE_KEY",
+    "MODEL_ID_KEY",
+    "N_EXTERNAL_CAMERAS_KEY",
+    "NEEDS_WRIST_CAMERA_KEY",
+    "POLICY_ID_KEY",
+    "PROMPT_KEY",
     "ProtocolPayload",
     "ProtocolValue",
-    "deserialize_from_msgpack",
-    "encode_image",
-    "serialize_to_msgpack",
+    "REWARD_DESCRIPTION_KEY",
+    "REWARD_KEY",
+    "RewardSignal",
+    "SERVER_FEATURES_KEY",
+    "STATUS_KEY",
+    "ServerFeature",
+    "ServerHandshake",
+    "make_server_handshake",
 ]

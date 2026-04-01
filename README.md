@@ -14,9 +14,9 @@ pip install -e .
 
 
 - **Transport:** WebSocket, binary frames, **msgpack** payloads.
-- **Handshake:** client connects to `wss://<host>/ws` (or `ws://`). The server sends the **first** message: a **ServerConfig** dict (camera names, image resolution, action space, etc.).
+- **Handshake:** client connects to `wss://<host>/ws` (or `ws://`). The server sends the **first** message: a **ServerHandshake** payload with camera names, image resolution when available, action-space metadata, and an optional `server_features` list.
 - **Auth:** clients that need an API key send header **`x-api-key`**.
-- **NumPy:** arrays are encoded with a **`__ndarray__`** tag: `data` (bytes), `dtype`, `shape` (see `serialize_to_msgpack` / `deserialize_from_msgpack` in `policy_inference_spec.protocol`).
+- **NumPy:** arrays are encoded with a **`__ndarray__`** tag: `data` (bytes), `dtype`, `shape` (see `serialize_to_msgpack` / `deserialize_from_msgpack` in `policy_inference_spec.codec`).
 - **Inference request** (msgpack dict): at minimum
   - `observation/state` — float32 **ndarray** joint/state vector, **1-D** length 97, encoded with `__ndarray__`
   - `observation/<camera_name>` — JPEG **bytes** (produced with `encode_image`)
@@ -24,9 +24,10 @@ pip install -e .
   - `model_id` — policy id string (may be empty)
 - **Inference response:** `action` (2-D ndarray; second dim **25**), `inference_time` (server-side ms), and **`policy_id`** (string).
 - **Control:** `{"endpoint": "reset"}` → `{"status": "ok"}`; `{"endpoint": "telemetry", ...}` → `{"status": "ok"}`.
+- **Reward signal:** `{"endpoint": "reward", "reward": <float>, "description": <optional str>}`. Clients default `reward` to `1.0`. They only send this message when the handshake advertises `"rewards"` in `server_features`; otherwise the client drops the message and logs a warning.
 
 Strict validation helpers live in `policy_inference_spec.hardware_model` (`validate_wire_inference_request_frame`, `validate_wire_inference_response`).
-Wire and endpoint constants live in `policy_inference_spec.constants`.
+Wire constants, handshake types, and reward types live in `policy_inference_spec.protocol`.
 
 ## Features to be added in future
 
@@ -37,10 +38,10 @@ Wire and endpoint constants live in `policy_inference_spec.constants`.
 
 | Module | Role |
 |--------|------|
-| `constants.py` | Shared wire keys, endpoint names, and default server port |
-| `protocol.py` | `encode_image`, `serialize_to_msgpack`, `deserialize_from_msgpack`, and ndarray msgpack tagging |
+| `protocol.py` | Shared wire keys, handshake/reward dataclasses, server-feature enums, and protocol type aliases |
+| `codec.py` | `encode_image`, `serialize_to_msgpack`, `deserialize_from_msgpack`, and ndarray msgpack tagging |
 | `hardware_model.py` | Hardware-model-aware shapes and strict request/response validation |
-| `client.py` | `RemotePolicyClient` (async transport + validation), `policy_ws_url`, warmup |
+| `client.py` | `RemotePolicyClient` (async transport + validation), `policy_ws_url`, warmup, and reward sending |
 
 ## License
 
