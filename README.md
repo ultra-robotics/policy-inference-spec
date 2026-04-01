@@ -41,7 +41,7 @@ Wire constants, handshake types, and reward types live in `policy_inference_spec
 | `protocol.py` | Shared wire keys, handshake/reward dataclasses, server-feature enums, and protocol type aliases |
 | `codec.py` | `encode_image`, `serialize_to_msgpack`, `deserialize_from_msgpack`, and ndarray msgpack tagging |
 | `hardware_model.py` | Hardware-model-aware shapes and strict request/response validation |
-| `client.py` | `RemotePolicyClient` (async transport + validation), `policy_ws_url`, warmup, and reward sending |
+| `client.py` | `RemotePolicyClient` (async transport + validation), `policy_ws_url`, and reward sending |
 
 ## License
 

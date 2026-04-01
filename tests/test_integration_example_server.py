@@ -2,23 +2,40 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+import simplejpeg  # type: ignore[import-untyped]
+from typing import Any, cast
 
-from policy_inference_spec.client import RemotePolicyClient, _random_warmup_wire_frame
-from policy_inference_spec.protocol import JOINT_STATE_KEY, ServerFeature
+from policy_inference_spec.client import RemotePolicyClient
+from policy_inference_spec.hardware_model import DEFAULT_HARDWARE_MODEL
+from policy_inference_spec.protocol import JOINT_STATE_KEY, MODEL_ID_KEY, PROMPT_KEY, ServerFeature
 from server.minimal import EXAMPLE_POLICY_ID, example_policy_actions, run_example_server, server_handshake_config
 
 pytestmark = pytest.mark.asyncio
 
 
+def _random_predict_frame() -> dict[str, object]:
+    rng = np.random.default_rng()
+    height, width = DEFAULT_HARDWARE_MODEL.image_resolution
+    frame: dict[str, object] = {
+        JOINT_STATE_KEY: rng.standard_normal(DEFAULT_HARDWARE_MODEL.state_dim, dtype=np.float32),
+        PROMPT_KEY: "",
+        MODEL_ID_KEY: "",
+    }
+    for cam in DEFAULT_HARDWARE_MODEL.cameras:
+        rgb = rng.integers(0, 256, size=(height, width, 3), dtype=np.uint8)
+        frame[f"observation/{cam}"] = simplejpeg.encode_jpeg(rgb, quality=75)
+    return frame
+
+
 async def test_client_predict_against_example_server() -> None:
-    frame = _random_warmup_wire_frame()
+    frame = _random_predict_frame()
     async with run_example_server() as url:
         client = RemotePolicyClient(url)
         async with client:
             pred = await client.predict(frame)
             assert client._server_config == server_handshake_config(server_features=(ServerFeature.REWARDS,))
 
-    expected = example_policy_actions(frame[JOINT_STATE_KEY])
+    expected = example_policy_actions(cast(np.ndarray[Any, Any], frame[JOINT_STATE_KEY]))
     assert pred.actions_d.shape == expected.shape
     assert pred.actions_d.dtype == np.float32
     assert np.allclose(pred.actions_d, expected)

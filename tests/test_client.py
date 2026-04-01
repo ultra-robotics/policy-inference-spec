@@ -164,14 +164,6 @@ async def test_predict_raises_clear_restart_signal_on_service_restart() -> None:
 
     ws_mock.close.assert_called_once()
 
-
-def test_warmup_swallows_connection_errors() -> None:
-    with patch("policy_inference_spec.client.ws_connect_sync") as m:
-        m.side_effect = OSError("no server")
-        client = RemotePolicyClient("ws://127.0.0.1:9/ws")
-        assert client.warmup() is False
-
-
 def test_validate_wire_inference_request_frame_rejects_hardware_model_field() -> None:
     jpeg = _minimal_jpeg()
     frame: dict[str, str | np.ndarray | bytes] = {

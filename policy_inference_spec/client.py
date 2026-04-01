@@ -9,25 +9,18 @@ import numpy as np
 import numpy.typing as npt
 import simplejpeg  # type: ignore[import-untyped]
 import websockets
-from websockets.sync.client import connect as ws_connect_sync
 
 from policy_inference_spec.client_helpers import (
     DEFAULT_PREDICT_URL,
     _emit_server_error_verbatim,
     _log_server_config,
-    _random_warmup_wire_frame,
     _server_image_resolution,
     _summarize_server_payload,
     _wire_camera_names,
     policy_ws_url,
 )
 from policy_inference_spec.codec import deserialize_from_msgpack, encode_image, serialize_to_msgpack
-from policy_inference_spec.hardware_model import (
-    DEFAULT_HARDWARE_MODEL,
-    HardwareModel,
-    validate_wire_inference_request_frame,
-    validate_wire_inference_response,
-)
+from policy_inference_spec.hardware_model import validate_wire_inference_request_frame, validate_wire_inference_response
 from policy_inference_spec.protocol import (
     ACTION_KEY,
     ENDPOINT_KEY,
@@ -131,35 +124,6 @@ class RemotePolicyClient:
             assert field.codec == "jpeg", f"{key} must use jpeg transport"
             adapted[key] = field.data
         return adapted
-
-    def warmup(self, *, hardware_model: str | HardwareModel = DEFAULT_HARDWARE_MODEL) -> bool:
-        try:
-            hm = HardwareModel(hardware_model)
-            uri = self.predict_url
-            with ws_connect_sync(uri, additional_headers=self._headers()) as ws:
-                first = ws.recv()
-                assert isinstance(first, bytes), type(first)
-                server_config_payload = deserialize_from_msgpack(first)
-                assert isinstance(server_config_payload, dict), "ServerConfig must be a dict"
-                server_config = ServerHandshake.from_payload(server_config_payload)
-                _log_server_config(server_config)
-                self._server_config = server_config
-                wire_frame = _random_warmup_wire_frame(
-                    hm,
-                    image_resolution=_server_image_resolution(server_config),
-                )
-                ws.send(serialize_to_msgpack(wire_frame))
-                response_raw = ws.recv()
-                if isinstance(response_raw, bytes):
-                    response = deserialize_from_msgpack(response_raw)
-                    _emit_server_error_verbatim(response)
-                else:
-                    _emit_server_error_verbatim(response_raw)
-            LOGGER.info("Inference server warmup complete")
-            return True
-        except Exception as exc:
-            LOGGER.error("Inference server warmup failed for %s: %s", self.predict_url, exc, exc_info=True)
-            return False
 
     async def _ensure_ws(self) -> None:
         uri = self.predict_url
