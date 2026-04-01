@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
@@ -7,13 +8,17 @@ from typing import Any
 import numpy as np
 import numpy.typing as npt
 
-from policy_inference_spec.constants import (
+from policy_inference_spec.protocol import (
     ACTION_KEY,
     ENDPOINT_KEY,
     INFERENCE_TIME_KEY,
     JOINT_STATE_KEY,
     MODEL_ID_KEY,
+    POLICY_ID_KEY,
     PROMPT_KEY,
+    ServerFeature,
+    ServerHandshake,
+    make_server_handshake,
 )
 
 
@@ -122,6 +127,20 @@ def _wire_inference_request_keys(*, hardware_model: HardwareModel = DEFAULT_HARD
     )
 
 
+def server_handshake_for_hardware_model(
+    hardware_model: str | HardwareModel = DEFAULT_HARDWARE_MODEL,
+    *,
+    include_image_resolution: bool = True,
+    server_features: Iterable[str | ServerFeature] = (),
+) -> ServerHandshake:
+    hm = HardwareModel(hardware_model)
+    return make_server_handshake(
+        camera_names=hm.cameras,
+        image_resolution=hm.image_resolution if include_image_resolution else None,
+        server_features=server_features,
+    )
+
+
 def validate_ultra_arrays_for_hardware_model(
     arrays: dict[str, npt.NDArray[Any]],
     hardware_model: str | HardwareModel = DEFAULT_HARDWARE_MODEL,
@@ -168,7 +187,7 @@ def validate_wire_inference_response(
 ) -> None:
     response_summary = _summarize_response_payload(result)
     assert "error" not in result, f"unexpected error payload: {response_summary}"
-    allowed = frozenset({ACTION_KEY, INFERENCE_TIME_KEY, "policy_id"})
+    allowed = frozenset({ACTION_KEY, INFERENCE_TIME_KEY, POLICY_ID_KEY})
     assert set(result.keys()) <= allowed, (
         f"response keys {set(result.keys())} not subset of {allowed}; summary={response_summary}"
     )
@@ -182,13 +201,14 @@ def validate_wire_inference_response(
     assert np.issubdtype(actions.dtype, np.floating), f"action must be floating ndarray, got {actions.dtype}"
     if INFERENCE_TIME_KEY in result:
         assert isinstance(result[INFERENCE_TIME_KEY], (int, float)), "inference_time must be numeric"
-    if "policy_id" in result:
-        assert isinstance(result["policy_id"], str), "policy_id must be str"
+    if POLICY_ID_KEY in result:
+        assert isinstance(result[POLICY_ID_KEY], str), f"{POLICY_ID_KEY} must be str"
 
 
 __all__ = [
     "DEFAULT_HARDWARE_MODEL",
     "HardwareModel",
+    "server_handshake_for_hardware_model",
     "validate_ultra_arrays_for_hardware_model",
     "validate_wire_inference_request_frame",
     "validate_wire_inference_response",

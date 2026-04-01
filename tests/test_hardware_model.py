@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
+import numpy.typing as npt
 import pytest
 
-from policy_inference_spec.constants import JOINT_STATE_KEY
+from policy_inference_spec.protocol import JOINT_STATE_KEY
 from policy_inference_spec.hardware_model import (
     DEFAULT_HARDWARE_MODEL,
     HardwareModel,
@@ -36,7 +39,7 @@ def test_hardware_model_properties() -> None:
 
 def test_validate_ultra_arrays_accepts_gateway_camera_names() -> None:
     image = np.zeros((1, 1, 3), dtype=np.uint8)
-    arrays = {
+    arrays: dict[str, npt.NDArray[Any]] = {
         JOINT_STATE_KEY: np.zeros((1, DEFAULT_HARDWARE_MODEL.state_dim), dtype=np.float32),
     }
     for camera in DEFAULT_HARDWARE_MODEL.cameras:
@@ -47,7 +50,7 @@ def test_validate_ultra_arrays_accepts_gateway_camera_names() -> None:
 
 def test_validate_ultra_arrays_rejects_legacy_ultra_camera_names() -> None:
     image = np.zeros((1, 1, 3), dtype=np.uint8)
-    arrays = {
+    arrays: dict[str, npt.NDArray[Any]] = {
         JOINT_STATE_KEY: np.zeros((1, DEFAULT_HARDWARE_MODEL.state_dim), dtype=np.float32),
         "observation.images.head": image,
         "observation.images.left_wrist": image,

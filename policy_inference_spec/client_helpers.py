@@ -6,14 +6,9 @@ from typing import Any
 from urllib.parse import urlparse
 
 import numpy as np
-import simplejpeg
+import simplejpeg  # type: ignore[import-untyped]
 
-from policy_inference_spec.constants import (
-    DEFAULT_INFERENCE_SERVER_PORT,
-    JOINT_STATE_KEY,
-    MODEL_ID_KEY,
-    PROMPT_KEY,
-)
+from policy_inference_spec.protocol import DEFAULT_INFERENCE_SERVER_PORT, JOINT_STATE_KEY, MODEL_ID_KEY, PROMPT_KEY, ServerHandshake
 from policy_inference_spec.hardware_model import (
     DEFAULT_HARDWARE_MODEL,
     HardwareModel,
@@ -33,8 +28,8 @@ def policy_ws_url(url: str) -> str:
     return u
 
 
-def _log_server_config(server_config: dict[str, Any]) -> None:
-    LOGGER.info("Received inference server config: %s", server_config)
+def _log_server_config(server_config: ServerHandshake) -> None:
+    LOGGER.info("Received inference server config: %s", server_config.to_payload())
 
 
 def _wire_camera_names(wire_frame: dict[str, Any]) -> list[str]:
@@ -84,18 +79,8 @@ def _emit_server_error_verbatim(payload: Any) -> None:
         print(_truncate_log_value(payload["error"], max_chars=400), file=sys.stderr, flush=True)
 
 
-def _server_image_resolution(server_config: dict[str, Any] | None) -> tuple[int, int] | None:
-    if server_config is None:
-        return None
-    raw = server_config.get("image_resolution")
-    if not isinstance(raw, (list, tuple)) or len(raw) != 2:
-        return None
-    if not all(isinstance(dim, (int, float)) for dim in raw):
-        return None
-    height, width = int(raw[0]), int(raw[1])
-    if height <= 0 or width <= 0:
-        return None
-    return height, width
+def _server_image_resolution(server_config: ServerHandshake | None) -> tuple[int, int] | None:
+    return None if server_config is None else server_config.image_resolution
 
 
 def _random_jpeg_bytes(rng: np.random.Generator, h: int, w: int) -> bytes:

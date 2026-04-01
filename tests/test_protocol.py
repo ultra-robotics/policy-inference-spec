@@ -5,16 +5,20 @@ from typing import Any, cast
 import msgspec
 import numpy as np
 import pytest
-import simplejpeg
+import simplejpeg  # type: ignore[import-untyped]
 from beartype.roar import BeartypeCallHintParamViolation
 
+from policy_inference_spec.codec import NdarrayField, deserialize_from_msgpack, encode_image, serialize_to_msgpack
 from policy_inference_spec.protocol import (
+    ENDPOINT_KEY,
+    ENDPOINT_REWARD,
     FloatArray,
-    NdarrayField,
     ProtocolPayload,
-    deserialize_from_msgpack,
-    encode_image,
-    serialize_to_msgpack,
+    REWARD_DESCRIPTION_KEY,
+    REWARD_KEY,
+    RewardSignal,
+    ServerFeature,
+    ServerHandshake,
 )
 from policy_inference_spec.hardware_model import validate_wire_inference_response
 
@@ -102,3 +106,27 @@ def test_encode_image_preserves_original_shape_metadata() -> None:
     assert encoded.dtype == str(expected.dtype)
     assert decoded.shape == (12, 16, 3)
     assert decoded.dtype == expected.dtype
+
+
+def test_server_handshake_round_trip_preserves_server_features() -> None:
+    handshake = ServerHandshake(
+        camera_names=("images/main_image", "images/left_wrist_image"),
+        image_resolution=(360, 640),
+        server_features=(ServerFeature.REWARDS.value,),
+    )
+
+    decoded = ServerHandshake.from_payload(handshake.to_payload())
+
+    assert decoded == handshake
+    assert decoded.supports(ServerFeature.REWARDS)
+
+
+def test_reward_signal_round_trip_with_optional_description() -> None:
+    reward_signal = RewardSignal(1.5, "The box was successfully sealed")
+
+    assert RewardSignal.from_payload(reward_signal.to_payload()) == reward_signal
+    assert reward_signal.to_payload() == {
+        ENDPOINT_KEY: ENDPOINT_REWARD,
+        REWARD_KEY: 1.5,
+        REWARD_DESCRIPTION_KEY: "The box was successfully sealed",
+    }

@@ -5,27 +5,35 @@ from typing import Any
 
 import numpy as np
 import pytest
-import simplejpeg
+import simplejpeg  # type: ignore[import-untyped]
 from websockets.exceptions import ConnectionClosedError
 from websockets.frames import Close
 
-from policy_inference_spec.constants import (
-    ACTION_KEY,
-    INFERENCE_TIME_KEY,
-    JOINT_STATE_KEY,
-    MODEL_ID_KEY,
-    PROMPT_KEY,
-)
 from policy_inference_spec.client import (
     DEFAULT_PREDICT_URL,
     InferenceServiceRestartedError,
     RemotePolicyClient,
     policy_ws_url,
 )
-from policy_inference_spec.protocol import serialize_to_msgpack
 from policy_inference_spec.hardware_model import (
     DEFAULT_HARDWARE_MODEL,
+    server_handshake_for_hardware_model,
     validate_wire_inference_request_frame,
+)
+from policy_inference_spec.codec import deserialize_from_msgpack, serialize_to_msgpack
+from policy_inference_spec.protocol import (
+    ACTION_KEY,
+    ENDPOINT_KEY,
+    ENDPOINT_REWARD,
+    INFERENCE_TIME_KEY,
+    JOINT_STATE_KEY,
+    MODEL_ID_KEY,
+    POLICY_ID_KEY,
+    PROMPT_KEY,
+    REWARD_DESCRIPTION_KEY,
+    REWARD_KEY,
+    STATUS_KEY,
+    ServerFeature,
 )
 
 
@@ -44,6 +52,15 @@ def _valid_wire_frame() -> dict[str, Any]:
         frame[f"observation/{camera}"] = jpeg
     validate_wire_inference_request_frame(frame)
     return frame
+
+
+def _server_handshake_payload(*, rewards_enabled: bool = False) -> dict[str, Any]:
+    features = (ServerFeature.REWARDS,) if rewards_enabled else ()
+    return server_handshake_for_hardware_model(
+        DEFAULT_HARDWARE_MODEL,
+        include_image_resolution=False,
+        server_features=features,
+    ).to_payload()
 
 
 @pytest.mark.parametrize(
@@ -70,13 +87,13 @@ def test_default_predict_url_is_ws() -> None:
 
 @pytest.mark.asyncio
 async def test_predict_round_trip_with_mock_websocket() -> None:
-    cfg = serialize_to_msgpack({"camera_names": [DEFAULT_HARDWARE_MODEL.cameras[0]]})
+    cfg = serialize_to_msgpack(_server_handshake_payload())
     actions = np.zeros((4, DEFAULT_HARDWARE_MODEL.action_dim), dtype=np.float32)
     resp = serialize_to_msgpack(
         {
             ACTION_KEY: actions,
             INFERENCE_TIME_KEY: 3.5,
-            "policy_id": "policy-1",
+            POLICY_ID_KEY: "policy-1",
         }
     )
     ws_mock = MagicMock()
@@ -103,9 +120,9 @@ async def test_predict_round_trip_with_mock_websocket() -> None:
 
 @pytest.mark.asyncio
 async def test_predict_rejects_invalid_response() -> None:
-    cfg = serialize_to_msgpack({})
+    cfg = serialize_to_msgpack(_server_handshake_payload())
     bad_actions = np.zeros((1, 7), dtype=np.float32)
-    resp = serialize_to_msgpack({ACTION_KEY: bad_actions, INFERENCE_TIME_KEY: 1.0, "policy_id": ""})
+    resp = serialize_to_msgpack({ACTION_KEY: bad_actions, INFERENCE_TIME_KEY: 1.0, POLICY_ID_KEY: ""})
     ws_mock = MagicMock()
     ws_mock.recv = AsyncMock(side_effect=[cfg, resp])
     ws_mock.send = AsyncMock()
@@ -124,7 +141,7 @@ async def test_predict_rejects_invalid_response() -> None:
 
 @pytest.mark.asyncio
 async def test_predict_raises_clear_restart_signal_on_service_restart() -> None:
-    cfg = serialize_to_msgpack({"camera_names": [DEFAULT_HARDWARE_MODEL.cameras[0]]})
+    cfg = serialize_to_msgpack(_server_handshake_payload())
     ws_mock = MagicMock()
     ws_mock.recv = AsyncMock(side_effect=[cfg])
     ws_mock.send = AsyncMock(
@@ -168,3 +185,78 @@ def test_validate_wire_inference_request_frame_rejects_hardware_model_field() ->
 
     with pytest.raises(AssertionError, match="wire inference keys"):
         validate_wire_inference_request_frame(frame)
+
+
+@pytest.mark.asyncio
+async def test_reward_sends_default_value_when_server_supports_rewards() -> None:
+    cfg = serialize_to_msgpack(_server_handshake_payload(rewards_enabled=True))
+    reward_ack = serialize_to_msgpack({ENDPOINT_KEY: ENDPOINT_REWARD, STATUS_KEY: "ok", REWARD_KEY: 1.0})
+    ws_mock = MagicMock()
+    ws_mock.recv = AsyncMock(side_effect=[cfg, reward_ack])
+    ws_mock.send = AsyncMock()
+    ws_mock.close = AsyncMock()
+
+    async def fake_connect(*_a: object, **_kw: object) -> MagicMock:
+        return ws_mock
+
+    with patch("policy_inference_spec.client.websockets.connect", side_effect=fake_connect):
+        client = RemotePolicyClient("ws://127.0.0.1:9/ws")
+        await client.reward()
+        await client.aclose()
+
+    ws_mock.send.assert_called_once()
+    sent_payload = deserialize_from_msgpack(ws_mock.send.await_args.args[0])
+    assert sent_payload == {ENDPOINT_KEY: ENDPOINT_REWARD, REWARD_KEY: 1.0}
+
+
+@pytest.mark.asyncio
+async def test_reward_includes_description_only_when_provided() -> None:
+    cfg = serialize_to_msgpack(_server_handshake_payload(rewards_enabled=True))
+    reward_ack = serialize_to_msgpack(
+        {
+            ENDPOINT_KEY: ENDPOINT_REWARD,
+            STATUS_KEY: "ok",
+            REWARD_KEY: 2.5,
+            REWARD_DESCRIPTION_KEY: "The box was successfully sealed",
+        }
+    )
+    ws_mock = MagicMock()
+    ws_mock.recv = AsyncMock(side_effect=[cfg, reward_ack])
+    ws_mock.send = AsyncMock()
+    ws_mock.close = AsyncMock()
+
+    async def fake_connect(*_a: object, **_kw: object) -> MagicMock:
+        return ws_mock
+
+    with patch("policy_inference_spec.client.websockets.connect", side_effect=fake_connect):
+        client = RemotePolicyClient("ws://127.0.0.1:9/ws")
+        await client.reward(2.5, "The box was successfully sealed")
+        await client.aclose()
+
+    sent_payload = deserialize_from_msgpack(ws_mock.send.await_args.args[0])
+    assert sent_payload == {
+        ENDPOINT_KEY: ENDPOINT_REWARD,
+        REWARD_KEY: 2.5,
+        REWARD_DESCRIPTION_KEY: "The box was successfully sealed",
+    }
+
+
+@pytest.mark.asyncio
+async def test_reward_drops_and_warns_when_server_lacks_reward_support(caplog: pytest.LogCaptureFixture) -> None:
+    cfg = serialize_to_msgpack(_server_handshake_payload(rewards_enabled=False))
+    ws_mock = MagicMock()
+    ws_mock.recv = AsyncMock(side_effect=[cfg])
+    ws_mock.send = AsyncMock()
+    ws_mock.close = AsyncMock()
+
+    async def fake_connect(*_a: object, **_kw: object) -> MagicMock:
+        return ws_mock
+
+    with patch("policy_inference_spec.client.websockets.connect", side_effect=fake_connect):
+        client = RemotePolicyClient("ws://127.0.0.1:9/ws")
+        with caplog.at_level("WARNING", logger="policy_inference_spec.client"):
+            await client.reward(3.0, "ignored")
+        await client.aclose()
+
+    ws_mock.send.assert_not_called()
+    assert "Dropping reward because server does not advertise rewards support" in caplog.text

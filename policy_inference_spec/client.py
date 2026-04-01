@@ -7,7 +7,7 @@ from typing import Any
 
 import numpy as np
 import numpy.typing as npt
-import simplejpeg
+import simplejpeg  # type: ignore[import-untyped]
 import websockets
 from websockets.sync.client import connect as ws_connect_sync
 
@@ -21,17 +21,24 @@ from policy_inference_spec.client_helpers import (
     _wire_camera_names,
     policy_ws_url,
 )
-from policy_inference_spec.constants import (
-    ACTION_KEY,
-    INFERENCE_TIME_KEY,
-    JOINT_STATE_KEY,
-)
-from policy_inference_spec.protocol import deserialize_from_msgpack, encode_image, serialize_to_msgpack
+from policy_inference_spec.codec import deserialize_from_msgpack, encode_image, serialize_to_msgpack
 from policy_inference_spec.hardware_model import (
     DEFAULT_HARDWARE_MODEL,
     HardwareModel,
     validate_wire_inference_request_frame,
     validate_wire_inference_response,
+)
+from policy_inference_spec.protocol import (
+    ACTION_KEY,
+    ENDPOINT_KEY,
+    ENDPOINT_REWARD,
+    INFERENCE_TIME_KEY,
+    JOINT_STATE_KEY,
+    REWARD_KEY,
+    RewardSignal,
+    STATUS_KEY,
+    ServerFeature,
+    ServerHandshake,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -73,7 +80,7 @@ class RemotePolicyClient:
         self.predict_url = policy_ws_url(predict_url)
         self._policy_auth_headers = policy_auth_headers or {}
         self._ws: Any = None
-        self._server_config: dict[str, Any] | None = None
+        self._server_config: ServerHandshake | None = None
         self._connected_url: str | None = None
         self._latency_window_started_at_s: float | None = None
         self._latency_total_ms: list[float] = []
@@ -99,9 +106,7 @@ class RemotePolicyClient:
     def _warn_on_camera_name_mismatch(self, wire_frame: dict[str, Any]) -> None:
         if self._server_config is None:
             return
-        server_camera_names = self._server_config.get("camera_names")
-        if not isinstance(server_camera_names, list) or not all(isinstance(name, str) for name in server_camera_names):
-            return
+        server_camera_names = self._server_config.camera_names
         sent_camera_names = _wire_camera_names(wire_frame)
         missing_camera_names = sorted(name for name in sent_camera_names if name not in set(server_camera_names))
         if missing_camera_names:
@@ -134,8 +139,9 @@ class RemotePolicyClient:
             with ws_connect_sync(uri, additional_headers=self._headers()) as ws:
                 first = ws.recv()
                 assert isinstance(first, bytes), type(first)
-                server_config = deserialize_from_msgpack(first)
-                assert isinstance(server_config, dict), "ServerConfig must be a dict"
+                server_config_payload = deserialize_from_msgpack(first)
+                assert isinstance(server_config_payload, dict), "ServerConfig must be a dict"
+                server_config = ServerHandshake.from_payload(server_config_payload)
                 _log_server_config(server_config)
                 self._server_config = server_config
                 wire_frame = _random_warmup_wire_frame(
@@ -165,8 +171,9 @@ class RemotePolicyClient:
         self._connected_url = uri
         first = await self._ws.recv()
         assert isinstance(first, bytes), type(first)
-        self._server_config = deserialize_from_msgpack(first)
-        assert isinstance(self._server_config, dict), "ServerConfig must be a dict"
+        server_config_payload = deserialize_from_msgpack(first)
+        assert isinstance(server_config_payload, dict), "ServerConfig must be a dict"
+        self._server_config = ServerHandshake.from_payload(server_config_payload)
         _log_server_config(self._server_config)
 
     async def _close_ws(self) -> None:
@@ -224,6 +231,28 @@ class RemotePolicyClient:
             raise exc
         await self._close_ws()
         raise InferenceServiceRestartedError("Inference service restarted during prediction") from exc
+
+    async def reward(self, value: float = 1.0, description: str | None = None) -> None:
+        await self._ensure_ws()
+        assert self._ws is not None
+        assert self._server_config is not None
+        if not self._server_config.supports(ServerFeature.REWARDS):
+            LOGGER.warning("Dropping reward because server does not advertise %s support", ServerFeature.REWARDS)
+            return
+
+        reward_signal = RewardSignal(reward=float(value), description=description)
+        await self._ws.send(serialize_to_msgpack(reward_signal.to_payload()))
+        response_raw = await self._ws.recv()
+        if isinstance(response_raw, str):
+            _emit_server_error_verbatim(response_raw)
+            raise AssertionError("unexpected text response from inference server")
+        response = deserialize_from_msgpack(response_raw)
+        _emit_server_error_verbatim(response)
+        assert isinstance(response, dict), f"unexpected reward response type {type(response)}"
+        assert response.get(STATUS_KEY) == "ok", f"unexpected reward response payload: {response}"
+        if response.get(ENDPOINT_KEY) == ENDPOINT_REWARD:
+            reward_ack = response.get(REWARD_KEY)
+            assert reward_ack is None or isinstance(reward_ack, (int, float)), f"{REWARD_KEY} must be numeric"
 
     async def predict(self, wire_frame: dict[str, Any]) -> RemotePolicyPrediction:
         try:
