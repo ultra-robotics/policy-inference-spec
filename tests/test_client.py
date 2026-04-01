@@ -9,19 +9,22 @@ import simplejpeg
 from websockets.exceptions import ConnectionClosedError
 from websockets.frames import Close
 
+from policy_inference_spec.constants import (
+    ACTION_KEY,
+    INFERENCE_TIME_KEY,
+    JOINT_STATE_KEY,
+    MODEL_ID_KEY,
+    PROMPT_KEY,
+)
 from policy_inference_spec.client import (
     DEFAULT_PREDICT_URL,
     InferenceServiceRestartedError,
     RemotePolicyClient,
     policy_ws_url,
 )
-from policy_inference_spec.protocol import msgpack_encode
-from policy_inference_spec.schema import (
-    KEY_ACTIONS,
-    KEY_INFERENCE_TIME,
-    KEY_MODEL_ID,
-    KEY_OBS_JOINT_POSITION,
-    KEY_PROMPT,
+from policy_inference_spec.protocol import serialize_to_msgpack
+from policy_inference_spec.hardware_model import (
+    DEFAULT_HARDWARE_MODEL,
     validate_wire_inference_request_frame,
 )
 
@@ -30,16 +33,15 @@ def _minimal_jpeg() -> bytes:
     return simplejpeg.encode_jpeg(np.zeros((16, 16, 3), dtype=np.uint8), quality=75)
 
 
-def _valid_gen2_wire_frame() -> dict[str, Any]:
+def _valid_wire_frame() -> dict[str, Any]:
     jpeg = _minimal_jpeg()
-    frame = {
-        KEY_OBS_JOINT_POSITION: np.zeros(89, dtype=np.float32),
-        "observation/images/main_image_left": jpeg,
-        "observation/images/left_wrist_image_left": jpeg,
-        "observation/images/right_wrist_image_left": jpeg,
-        KEY_PROMPT: "test",
-        KEY_MODEL_ID: "",
+    frame: dict[str, str | np.ndarray | bytes] = {
+        JOINT_STATE_KEY: np.zeros(DEFAULT_HARDWARE_MODEL.state_dim, dtype=np.float32),
+        PROMPT_KEY: "test",
+        MODEL_ID_KEY: "",
     }
+    for camera in DEFAULT_HARDWARE_MODEL.cameras:
+        frame[f"observation/{camera}"] = jpeg
     validate_wire_inference_request_frame(frame)
     return frame
 
@@ -68,12 +70,12 @@ def test_default_predict_url_is_ws() -> None:
 
 @pytest.mark.asyncio
 async def test_predict_round_trip_with_mock_websocket() -> None:
-    cfg = msgpack_encode({"camera_names": ["images/main_image_left"]})
-    actions = np.zeros((4, 25), dtype=np.float32)
-    resp = msgpack_encode(
+    cfg = serialize_to_msgpack({"camera_names": [DEFAULT_HARDWARE_MODEL.cameras[0]]})
+    actions = np.zeros((4, DEFAULT_HARDWARE_MODEL.action_dim), dtype=np.float32)
+    resp = serialize_to_msgpack(
         {
-            KEY_ACTIONS: actions,
-            KEY_INFERENCE_TIME: 3.5,
+            ACTION_KEY: actions,
+            INFERENCE_TIME_KEY: 3.5,
             "policy_id": "policy-1",
         }
     )
@@ -85,14 +87,14 @@ async def test_predict_round_trip_with_mock_websocket() -> None:
     async def fake_connect(*_a: object, **_kw: object) -> MagicMock:
         return ws_mock
 
-    frame = _valid_gen2_wire_frame()
+    frame = _valid_wire_frame()
     with patch("policy_inference_spec.client.websockets.connect", side_effect=fake_connect):
         client = RemotePolicyClient("ws://127.0.0.1:9/ws")
         pred = await client.predict(frame)
         await client.aclose()
 
     assert pred.policy_id == "policy-1"
-    assert pred.actions_d.shape == (4, 25)
+    assert pred.actions_d.shape == (4, DEFAULT_HARDWARE_MODEL.action_dim)
     assert pred.actions_d.dtype == np.float32
     assert pred.total_latency_ms >= 0.0
     ws_mock.send.assert_called_once()
@@ -101,10 +103,9 @@ async def test_predict_round_trip_with_mock_websocket() -> None:
 
 @pytest.mark.asyncio
 async def test_predict_rejects_invalid_response() -> None:
-    cfg = msgpack_encode({})
+    cfg = serialize_to_msgpack({})
     bad_actions = np.zeros((1, 7), dtype=np.float32)
-    resp = msgpack_encode({KEY_ACTIONS: bad_actions, KEY_INFERENCE_TIME: 1.0,
-                           "policy_id": ""})
+    resp = serialize_to_msgpack({ACTION_KEY: bad_actions, INFERENCE_TIME_KEY: 1.0, "policy_id": ""})
     ws_mock = MagicMock()
     ws_mock.recv = AsyncMock(side_effect=[cfg, resp])
     ws_mock.send = AsyncMock()
@@ -113,7 +114,7 @@ async def test_predict_rejects_invalid_response() -> None:
     async def fake_connect(*_a: object, **_kw: object) -> MagicMock:
         return ws_mock
 
-    frame = _valid_gen2_wire_frame()
+    frame = _valid_wire_frame()
     with patch("policy_inference_spec.client.websockets.connect", side_effect=fake_connect):
         client = RemotePolicyClient("ws://127.0.0.1:9/ws")
         with pytest.raises(AssertionError):
@@ -123,7 +124,7 @@ async def test_predict_rejects_invalid_response() -> None:
 
 @pytest.mark.asyncio
 async def test_predict_raises_clear_restart_signal_on_service_restart() -> None:
-    cfg = msgpack_encode({"camera_names": ["images/main_image_left"]})
+    cfg = serialize_to_msgpack({"camera_names": [DEFAULT_HARDWARE_MODEL.cameras[0]]})
     ws_mock = MagicMock()
     ws_mock.recv = AsyncMock(side_effect=[cfg])
     ws_mock.send = AsyncMock(
@@ -138,7 +139,7 @@ async def test_predict_raises_clear_restart_signal_on_service_restart() -> None:
     async def fake_connect(*_a: object, **_kw: object) -> MagicMock:
         return ws_mock
 
-    frame = _valid_gen2_wire_frame()
+    frame = _valid_wire_frame()
     with patch("policy_inference_spec.client.websockets.connect", side_effect=fake_connect):
         client = RemotePolicyClient("ws://127.0.0.1:9/ws")
         with pytest.raises(InferenceServiceRestartedError, match="service restarted"):
@@ -152,3 +153,18 @@ def test_warmup_swallows_connection_errors() -> None:
         m.side_effect = OSError("no server")
         client = RemotePolicyClient("ws://127.0.0.1:9/ws")
         assert client.warmup() is False
+
+
+def test_validate_wire_inference_request_frame_rejects_hardware_model_field() -> None:
+    jpeg = _minimal_jpeg()
+    frame: dict[str, str | np.ndarray | bytes] = {
+        "hardware_model": "gen2",
+        JOINT_STATE_KEY: np.zeros(DEFAULT_HARDWARE_MODEL.state_dim, dtype=np.float32),
+        PROMPT_KEY: "test",
+        MODEL_ID_KEY: "",
+    }
+    for camera in DEFAULT_HARDWARE_MODEL.cameras:
+        frame[f"observation/{camera}"] = jpeg
+
+    with pytest.raises(AssertionError, match="wire inference keys"):
+        validate_wire_inference_request_frame(frame)

@@ -1,3 +1,9 @@
+# ruff: noqa: E402
+
+from beartype.claw import beartype_this_package
+
+beartype_this_package()
+
 from policy_inference_spec.client import (
     DEFAULT_PREDICT_URL,
     InferenceServiceRestartedError,
@@ -7,15 +13,19 @@ from policy_inference_spec.client import (
 )
 from policy_inference_spec.constants import DEFAULT_INFERENCE_SERVER_PORT
 from policy_inference_spec.protocol import (
+    FloatArray,
+    ImageArray,
     InferenceMetadataValue,
     NdarrayField,
-    decode_ndarray,
-    encode_ndarray,
-    msgpack_decode,
-    msgpack_encode,
+    ProtocolPayload,
+    ProtocolValue,
+    deserialize_from_msgpack,
+    encode_image,
+    serialize_to_msgpack,
 )
-from policy_inference_spec.hardware_model import HardwareModel, as_hardware_model
-from policy_inference_spec.schema import (
+from policy_inference_spec.hardware_model import (
+    DEFAULT_HARDWARE_MODEL,
+    HardwareModel,
     validate_ultra_arrays_for_hardware_model,
     validate_wire_inference_request_frame,
     validate_wire_inference_response,
@@ -24,18 +34,21 @@ from policy_inference_spec.schema import (
 __all__ = [
     "DEFAULT_INFERENCE_SERVER_PORT",
     "DEFAULT_PREDICT_URL",
+    "DEFAULT_HARDWARE_MODEL",
+    "FloatArray",
     "HardwareModel",
+    "ImageArray",
     "InferenceServiceRestartedError",
     "InferenceMetadataValue",
     "NdarrayField",
+    "ProtocolPayload",
+    "ProtocolValue",
     "RemotePolicyClient",
     "RemotePolicyPrediction",
-    "decode_ndarray",
-    "encode_ndarray",
-    "msgpack_decode",
-    "msgpack_encode",
+    "deserialize_from_msgpack",
+    "encode_image",
     "policy_ws_url",
-    "as_hardware_model",
+    "serialize_to_msgpack",
     "validate_ultra_arrays_for_hardware_model",
     "validate_wire_inference_request_frame",
     "validate_wire_inference_response",

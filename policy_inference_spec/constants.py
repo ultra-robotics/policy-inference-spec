@@ -1,3 +1,9 @@
 DEFAULT_INFERENCE_SERVER_PORT = 18090
-
-__all__ = ["DEFAULT_INFERENCE_SERVER_PORT"]
+JOINT_STATE_KEY = "observation/state"  # State vector (Actually contains more than just qpos)
+PROMPT_KEY = "prompt"
+ACTION_KEY = "action"
+INFERENCE_TIME_KEY = "inference_time"
+ENDPOINT_KEY = "endpoint"
+ENDPOINT_RESET = "reset"
+ENDPOINT_TELEMETRY = "telemetry"
+MODEL_ID_KEY = "model_id"

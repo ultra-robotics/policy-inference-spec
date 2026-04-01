@@ -7,6 +7,7 @@ from typing import Any
 
 import numpy as np
 import numpy.typing as npt
+import simplejpeg
 import websockets
 from websockets.sync.client import connect as ws_connect_sync
 
@@ -20,17 +21,33 @@ from policy_inference_spec.client_helpers import (
     _wire_camera_names,
     policy_ws_url,
 )
-from policy_inference_spec.hardware_model import HardwareModel, as_hardware_model
-from policy_inference_spec.protocol import chw_from_wire_image, encode_ndarray, msgpack_decode, msgpack_encode
-from policy_inference_spec.schema import (
-    KEY_ACTIONS,
-    KEY_INFERENCE_TIME,
-    KEY_OBS_JOINT_POSITION,
+from policy_inference_spec.constants import (
+    ACTION_KEY,
+    INFERENCE_TIME_KEY,
+    JOINT_STATE_KEY,
+)
+from policy_inference_spec.protocol import deserialize_from_msgpack, encode_image, serialize_to_msgpack
+from policy_inference_spec.hardware_model import (
+    DEFAULT_HARDWARE_MODEL,
+    HardwareModel,
     validate_wire_inference_request_frame,
     validate_wire_inference_response,
 )
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _wire_image_to_hwc_uint8(value: Any) -> npt.NDArray[np.uint8]:
+    if isinstance(value, bytes):
+        return np.ascontiguousarray(simplejpeg.decode_jpeg(value)).astype(np.uint8, copy=False)
+    assert isinstance(value, np.ndarray), f"image value must be bytes or ndarray, got {type(value)}"
+    if value.ndim == 4:
+        assert value.shape[0] == 1, f"JPEG transport only supports batch size 1, got shape {value.shape}"
+        value = value[0]
+    assert value.ndim == 3, f"JPEG transport expects HWC or BHWC arrays, got shape {value.shape}"
+    assert value.shape[-1] == 3, f"JPEG transport expects channel-last RGB arrays, got shape {value.shape}"
+    assert value.dtype == np.uint8, f"JPEG transport expects uint8 arrays, got {value.dtype}"
+    return np.ascontiguousarray(value)
 
 
 @dataclass(frozen=True)
@@ -103,30 +120,32 @@ class RemotePolicyClient:
         target_h, target_w = image_resolution
         adapted = dict(wire_frame)
         for key, value in wire_frame.items():
-            if not key.startswith("observation/") or key == KEY_OBS_JOINT_POSITION:
+            if not key.startswith("observation/") or key == JOINT_STATE_KEY:
                 continue
-            chw = chw_from_wire_image(value, (3, target_h, target_w))
-            field = encode_ndarray(chw, jpeg_quality=75)
+            field = encode_image(_wire_image_to_hwc_uint8(value), target_h, target_w, jpeg_quality=75)
             assert field.codec == "jpeg", f"{key} must use jpeg transport"
             adapted[key] = field.data
         return adapted
 
-    def warmup(self, *, hardware_model: str | HardwareModel = HardwareModel.GEN2) -> bool:
+    def warmup(self, *, hardware_model: str | HardwareModel = DEFAULT_HARDWARE_MODEL) -> bool:
         try:
-            hm = as_hardware_model(hardware_model)
+            hm = HardwareModel(hardware_model)
             uri = self.predict_url
             with ws_connect_sync(uri, additional_headers=self._headers()) as ws:
                 first = ws.recv()
                 assert isinstance(first, bytes), type(first)
-                server_config = msgpack_decode(first)
+                server_config = deserialize_from_msgpack(first)
                 assert isinstance(server_config, dict), "ServerConfig must be a dict"
                 _log_server_config(server_config)
                 self._server_config = server_config
-                wire_frame = _random_warmup_wire_frame(hm, image_resolution=_server_image_resolution(server_config))
-                ws.send(msgpack_encode(wire_frame))
+                wire_frame = _random_warmup_wire_frame(
+                    hm,
+                    image_resolution=_server_image_resolution(server_config),
+                )
+                ws.send(serialize_to_msgpack(wire_frame))
                 response_raw = ws.recv()
                 if isinstance(response_raw, bytes):
-                    response = msgpack_decode(response_raw)
+                    response = deserialize_from_msgpack(response_raw)
                     _emit_server_error_verbatim(response)
                 else:
                     _emit_server_error_verbatim(response_raw)
@@ -146,7 +165,7 @@ class RemotePolicyClient:
         self._connected_url = uri
         first = await self._ws.recv()
         assert isinstance(first, bytes), type(first)
-        self._server_config = msgpack_decode(first)
+        self._server_config = deserialize_from_msgpack(first)
         assert isinstance(self._server_config, dict), "ServerConfig must be a dict"
         _log_server_config(self._server_config)
 
@@ -213,7 +232,7 @@ class RemotePolicyClient:
             wire_frame = self._adapt_wire_frame_to_server_config(wire_frame)
             validate_wire_inference_request_frame(wire_frame)
             self._warn_on_camera_name_mismatch(wire_frame)
-            payload = msgpack_encode(wire_frame)
+            payload = serialize_to_msgpack(wire_frame)
             start_time_ns = time.time_ns()
             await self._ws.send(payload)
             response_raw = await self._ws.recv()
@@ -225,7 +244,7 @@ class RemotePolicyClient:
         if isinstance(response_raw, str):
             _emit_server_error_verbatim(response_raw)
             raise AssertionError("unexpected text response from inference server")
-        result = msgpack_decode(response_raw)
+        result = deserialize_from_msgpack(response_raw)
         _emit_server_error_verbatim(result)
         assert isinstance(result, dict), f"unexpected response type {type(result)}"
         try:
@@ -233,9 +252,12 @@ class RemotePolicyClient:
         except AssertionError as exc:
             LOGGER.error("Malformed inference response: %s", _summarize_server_payload(result))
             raise AssertionError(f"{exc}") from exc
-        actions = result[KEY_ACTIONS]
-        infer_raw = result.get(KEY_INFERENCE_TIME)
-        server_latency_ms = float(infer_raw) if infer_raw is not None else 0.0
+        actions = result[ACTION_KEY]
+        infer_raw = result.get(INFERENCE_TIME_KEY)
+        server_latency_ms = 0.0
+        if infer_raw is not None:
+            assert isinstance(infer_raw, (int, float)), f"{INFERENCE_TIME_KEY} must be numeric"
+            server_latency_ms = float(infer_raw)
         policy_id_used = str(result.get("policy_id", ""))
         self._record_latency(total_latency_ms=total_latency_ms, server_latency_ms=server_latency_ms)
 
