@@ -88,10 +88,15 @@ class RemotePolicyClient:
     async def aclose(self) -> None:
         await self._close_ws()
 
-    def update_connection(self, *, predict_url: str, policy_auth_headers: dict[str, str] | None = None) -> None:
+    async def update_connection(
+        self,
+        *,
+        predict_url: str,
+        policy_auth_headers: dict[str, str] | None = None,
+    ) -> None:
         self.predict_url = policy_ws_url(predict_url)
         self._policy_auth_headers = policy_auth_headers or {}
-        self._connected_url = None
+        await self._close_ws()
 
     def _headers(self) -> list[tuple[str, str]]:
         return [(k, v) for k, v in self._policy_auth_headers.items()]
