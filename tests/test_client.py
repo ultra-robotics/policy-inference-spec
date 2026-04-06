@@ -23,6 +23,9 @@ from policy_inference_spec.hardware_model import (
 from policy_inference_spec.codec import deserialize_from_msgpack, serialize_to_msgpack
 from policy_inference_spec.protocol import (
     ACTION_KEY,
+    CONTEXT_EMBEDDINGS_KEY,
+    CONTEXT_EMBEDDING_TOKENS,
+    CONTEXT_EMBEDDING_WIDTH,
     ENDPOINT_KEY,
     ENDPOINT_REWARD,
     INFERENCE_TIME_KEY,
@@ -89,9 +92,12 @@ def test_default_predict_url_is_ws() -> None:
 async def test_predict_round_trip_with_mock_websocket() -> None:
     cfg = serialize_to_msgpack(_server_handshake_payload())
     actions = np.zeros((4, DEFAULT_HARDWARE_MODEL.action_dim), dtype=np.float32)
+    context_embeddings = np.zeros((CONTEXT_EMBEDDING_TOKENS, CONTEXT_EMBEDDING_WIDTH), dtype=np.float32)
+    context_embeddings[-1, -1] = 1.0
     resp = serialize_to_msgpack(
         {
             ACTION_KEY: actions,
+            CONTEXT_EMBEDDINGS_KEY: context_embeddings,
             INFERENCE_TIME_KEY: 3.5,
             POLICY_ID_KEY: "policy-1",
         }
@@ -113,6 +119,8 @@ async def test_predict_round_trip_with_mock_websocket() -> None:
     assert pred.policy_id == "policy-1"
     assert pred.actions_d.shape == (4, DEFAULT_HARDWARE_MODEL.action_dim)
     assert pred.actions_d.dtype == np.float32
+    assert pred.context_embeddings.shape == (CONTEXT_EMBEDDING_TOKENS, CONTEXT_EMBEDDING_WIDTH)
+    assert pred.context_embeddings.dtype == np.float32
     assert pred.total_latency_ms >= 0.0
     ws_mock.send.assert_called_once()
     assert ws_mock.recv.call_count == 2
@@ -122,7 +130,15 @@ async def test_predict_round_trip_with_mock_websocket() -> None:
 async def test_predict_rejects_invalid_response() -> None:
     cfg = serialize_to_msgpack(_server_handshake_payload())
     bad_actions = np.zeros((1, 7), dtype=np.float32)
-    resp = serialize_to_msgpack({ACTION_KEY: bad_actions, INFERENCE_TIME_KEY: 1.0, POLICY_ID_KEY: ""})
+    context_embeddings = np.zeros((CONTEXT_EMBEDDING_TOKENS, CONTEXT_EMBEDDING_WIDTH), dtype=np.float32)
+    resp = serialize_to_msgpack(
+        {
+            ACTION_KEY: bad_actions,
+            CONTEXT_EMBEDDINGS_KEY: context_embeddings,
+            INFERENCE_TIME_KEY: 1.0,
+            POLICY_ID_KEY: "",
+        }
+    )
     ws_mock = MagicMock()
     ws_mock.recv = AsyncMock(side_effect=[cfg, resp])
     ws_mock.send = AsyncMock()
@@ -197,6 +213,7 @@ async def test_reward_sends_default_value_when_server_supports_rewards() -> None
         await client.aclose()
 
     ws_mock.send.assert_called_once()
+    assert ws_mock.send.await_args is not None
     sent_payload = deserialize_from_msgpack(ws_mock.send.await_args.args[0])
     assert sent_payload == {ENDPOINT_KEY: ENDPOINT_REWARD, REWARD_KEY: 1.0}
 
@@ -225,6 +242,7 @@ async def test_reward_includes_description_only_when_provided() -> None:
         await client.reward(2.5, "The box was successfully sealed")
         await client.aclose()
 
+    assert ws_mock.send.await_args is not None
     sent_payload = deserialize_from_msgpack(ws_mock.send.await_args.args[0])
     assert sent_payload == {
         ENDPOINT_KEY: ENDPOINT_REWARD,

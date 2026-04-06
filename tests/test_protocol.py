@@ -10,6 +10,10 @@ from beartype.roar import BeartypeCallHintParamViolation
 
 from policy_inference_spec.codec import NdarrayField, deserialize_from_msgpack, encode_image, serialize_to_msgpack
 from policy_inference_spec.protocol import (
+    ACTION_KEY,
+    CONTEXT_EMBEDDINGS_KEY,
+    CONTEXT_EMBEDDING_TOKENS,
+    CONTEXT_EMBEDDING_WIDTH,
     ENDPOINT_KEY,
     ENDPOINT_REWARD,
     FloatArray,
@@ -79,12 +83,13 @@ def test_validate_wire_inference_response_summarizes_binary_like_payloads() -> N
     with pytest.raises(AssertionError) as exc_info:
         validate_wire_inference_response(
             {
-                "action": {
+                ACTION_KEY: {
                     "__ndarray__": True,
                     "data": b"\x00" * 32,
                     "dtype": "float64",
                     "shape": [2, 2],
-                }
+                },
+                CONTEXT_EMBEDDINGS_KEY: np.zeros((CONTEXT_EMBEDDING_TOKENS, CONTEXT_EMBEDDING_WIDTH), dtype=np.float32),
             }
         )
 
@@ -92,6 +97,18 @@ def test_validate_wire_inference_response_summarizes_binary_like_payloads() -> N
     assert "summary=" in message
     assert "dict(keys=['__ndarray__', 'data', 'dtype', 'shape'])" in message
     assert "\\x00" not in message
+
+
+def test_validate_wire_inference_response_accepts_context_embeddings() -> None:
+    validate_wire_inference_response(
+        {
+            ACTION_KEY: np.zeros((2, 25), dtype=np.float32),
+            CONTEXT_EMBEDDINGS_KEY: np.zeros(
+                (CONTEXT_EMBEDDING_TOKENS, CONTEXT_EMBEDDING_WIDTH),
+                dtype=np.float32,
+            ),
+        }
+    )
 
 
 def test_encode_image_preserves_original_shape_metadata() -> None:

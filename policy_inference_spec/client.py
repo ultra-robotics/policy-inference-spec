@@ -23,6 +23,7 @@ from policy_inference_spec.codec import deserialize_from_msgpack, encode_image, 
 from policy_inference_spec.hardware_model import validate_wire_inference_request_frame, validate_wire_inference_response
 from policy_inference_spec.protocol import (
     ACTION_KEY,
+    CONTEXT_EMBEDDINGS_KEY,
     ENDPOINT_KEY,
     ENDPOINT_REWARD,
     INFERENCE_TIME_KEY,
@@ -53,6 +54,7 @@ def _wire_image_to_hwc_uint8(value: Any) -> npt.NDArray[np.uint8]:
 @dataclass(frozen=True)
 class RemotePolicyPrediction:
     actions_d: npt.NDArray[np.float32]
+    context_embeddings: npt.NDArray[np.float32]
     total_latency_ms: float
     policy_id: str
 
@@ -260,8 +262,10 @@ class RemotePolicyClient:
         self._record_latency(total_latency_ms=total_latency_ms, server_latency_ms=server_latency_ms)
 
         actions_d = np.array(actions, dtype=np.float32)
+        context_embeddings = np.array(result[CONTEXT_EMBEDDINGS_KEY], dtype=np.float32)
         return RemotePolicyPrediction(
             actions_d=actions_d,
+            context_embeddings=context_embeddings,
             total_latency_ms=total_latency_ms,
             policy_id=policy_id_used,
         )
