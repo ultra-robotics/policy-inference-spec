@@ -13,6 +13,7 @@ DEFAULT_INFERENCE_SERVER_PORT = 18090
 JOINT_STATE_KEY = "observation/state"
 PROMPT_KEY = "prompt"
 ACTION_KEY = "action"
+CONTEXT_EMBEDDINGS_KEY = "context_embeddings"
 INFERENCE_TIME_KEY = "inference_time"
 ENDPOINT_KEY = "endpoint"
 ENDPOINT_RESET = "reset"
@@ -31,6 +32,8 @@ N_EXTERNAL_CAMERAS_KEY = "n_external_cameras"
 SERVER_FEATURES_KEY = "server_features"
 STATUS_KEY = "status"
 ERROR_KEY = "error"
+CONTEXT_EMBEDDING_TOKENS = 2
+CONTEXT_EMBEDDING_WIDTH = 128
 
 InferenceMetadataValue: TypeAlias = str | int | float | bool | list[str] | list[int]
 ImageArray: TypeAlias = npt.NDArray[np.uint8]
@@ -176,6 +179,9 @@ __all__ = [
     "ACTION_KEY",
     "ACTION_SPACE_KEY",
     "CAMERA_NAMES_KEY",
+    "CONTEXT_EMBEDDINGS_KEY",
+    "CONTEXT_EMBEDDING_TOKENS",
+    "CONTEXT_EMBEDDING_WIDTH",
     "DEFAULT_INFERENCE_SERVER_PORT",
     "ENDPOINT_KEY",
     "ENDPOINT_RESET",
