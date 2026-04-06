@@ -2,11 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
-import cv2
 import msgspec
 import numpy as np
 import numpy.typing as npt
-import simplejpeg  # type: ignore[import-untyped]
+import simplejpeg
 
 from policy_inference_spec.protocol import ImageArray, ProtocolPayload
 
@@ -19,21 +18,6 @@ class NdarrayField(msgspec.Struct):
     shape: tuple[int, ...]
     dtype: str = "float32"
     codec: str = "raw"
-
-
-def _resize_hwc_uint8(image: ImageArray, height: int, width: int) -> ImageArray:
-    h, w = image.shape[:2]
-    if (h, w) == (height, width):
-        return image
-    resize = getattr(cv2, "resize", None)
-    inter_area = getattr(cv2, "INTER_AREA", 1)
-    if resize is not None:
-        return np.ascontiguousarray(resize(image, (width, height), interpolation=inter_area)).astype(
-            np.uint8, copy=False
-        )
-    y_idx = np.linspace(0, h - 1, height, dtype=np.intp)
-    x_idx = np.linspace(0, w - 1, width, dtype=np.intp)
-    return np.ascontiguousarray(image[y_idx[:, None], x_idx[None, :]]).astype(np.uint8, copy=False)
 
 
 def _as_hwc_uint8(image: npt.NDArray[np.uint8]) -> ImageArray:
@@ -99,17 +83,12 @@ def _walk_decode(obj: Any) -> Any:
 
 def encode_image(
     image: npt.NDArray[np.uint8],
-    height: int,
-    width: int,
     jpeg_quality: int = 75,
 ) -> NdarrayField:
-    assert height > 0, f"height must be positive, got {height}"
-    assert width > 0, f"width must be positive, got {width}"
     assert 0 < jpeg_quality <= 100, f"jpeg_quality must be in [1, 100], got {jpeg_quality}"
     normalized = _as_hwc_uint8(image)
-    resized = _resize_hwc_uint8(normalized, height, width)
     return NdarrayField(
-        data=simplejpeg.encode_jpeg(resized, quality=jpeg_quality),
+        data=simplejpeg.encode_jpeg(normalized, quality=jpeg_quality),
         shape=image.shape,
         dtype=str(image.dtype),
         codec="jpeg",
