@@ -136,9 +136,11 @@ async def test_predict_round_trip_with_mock_websocket() -> None:
 @pytest.mark.asyncio
 async def test_predict_jpeg_encodes_ndarray_images_without_resizing() -> None:
     cfg = serialize_to_msgpack(_server_handshake_payload_with_resolution())
+    context_embeddings = np.zeros((CONTEXT_EMBEDDING_TOKENS, CONTEXT_EMBEDDING_WIDTH), dtype=np.float32)
     resp = serialize_to_msgpack(
         {
             ACTION_KEY: np.zeros((1, DEFAULT_HARDWARE_MODEL.action_dim), dtype=np.float32),
+            CONTEXT_EMBEDDINGS_KEY: context_embeddings,
             INFERENCE_TIME_KEY: 1.0,
             POLICY_ID_KEY: "policy-1",
         }
