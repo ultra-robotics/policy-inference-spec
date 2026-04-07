@@ -5,7 +5,7 @@ from typing import Any, cast
 import msgspec
 import numpy as np
 import pytest
-import simplejpeg  # type: ignore[import-untyped]
+import simplejpeg
 from beartype.roar import BeartypeCallHintParamViolation
 
 from policy_inference_spec.codec import NdarrayField, deserialize_from_msgpack, encode_image, serialize_to_msgpack
@@ -114,7 +114,7 @@ def test_validate_wire_inference_response_accepts_context_embeddings() -> None:
 def test_encode_image_preserves_original_shape_metadata() -> None:
     expected = np.zeros((1, 12, 16, 3), dtype=np.uint8)
 
-    encoded = encode_image(expected, height=12, width=16, jpeg_quality=75)
+    encoded = encode_image(expected, jpeg_quality=75)
     decoded = simplejpeg.decode_jpeg(encoded.data)
 
     assert isinstance(encoded, NdarrayField)

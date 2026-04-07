@@ -5,7 +5,7 @@ from typing import Any
 
 import numpy as np
 import pytest
-import simplejpeg  # type: ignore[import-untyped]
+import simplejpeg
 from websockets.exceptions import ConnectionClosedError
 from websockets.frames import Close
 
@@ -63,6 +63,13 @@ def _server_handshake_payload(*, rewards_enabled: bool = False) -> dict[str, Any
         DEFAULT_HARDWARE_MODEL,
         include_image_resolution=False,
         server_features=features,
+    ).to_payload()
+
+
+def _server_handshake_payload_with_resolution() -> dict[str, Any]:
+    return server_handshake_for_hardware_model(
+        DEFAULT_HARDWARE_MODEL,
+        include_image_resolution=True,
     ).to_payload()
 
 
@@ -124,6 +131,53 @@ async def test_predict_round_trip_with_mock_websocket() -> None:
     assert pred.total_latency_ms >= 0.0
     ws_mock.send.assert_called_once()
     assert ws_mock.recv.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_predict_jpeg_encodes_ndarray_images_without_resizing() -> None:
+    cfg = serialize_to_msgpack(_server_handshake_payload_with_resolution())
+    context_embeddings = np.zeros((CONTEXT_EMBEDDING_TOKENS, CONTEXT_EMBEDDING_WIDTH), dtype=np.float32)
+    resp = serialize_to_msgpack(
+        {
+            ACTION_KEY: np.zeros((1, DEFAULT_HARDWARE_MODEL.action_dim), dtype=np.float32),
+            CONTEXT_EMBEDDINGS_KEY: context_embeddings,
+            INFERENCE_TIME_KEY: 1.0,
+            POLICY_ID_KEY: "policy-1",
+        }
+    )
+    ws_mock = MagicMock()
+    ws_mock.recv = AsyncMock(side_effect=[cfg, resp])
+    ws_mock.send = AsyncMock()
+    ws_mock.close = AsyncMock()
+
+    async def fake_connect(*_a: object, **_kw: object) -> MagicMock:
+        return ws_mock
+
+    frame: dict[str, Any] = {
+        JOINT_STATE_KEY: np.zeros(DEFAULT_HARDWARE_MODEL.state_dim, dtype=np.float32),
+        PROMPT_KEY: "test",
+        MODEL_ID_KEY: "",
+        "observation/images/main_image": np.zeros((23, 37, 3), dtype=np.uint8),
+        "observation/images/left_wrist_image": np.zeros((19, 29, 3), dtype=np.uint8),
+        "observation/images/right_wrist_image": np.zeros((17, 31, 3), dtype=np.uint8),
+    }
+
+    with patch("policy_inference_spec.client.websockets.connect", side_effect=fake_connect):
+        client = RemotePolicyClient("ws://127.0.0.1:9/ws")
+        await client.predict(frame)
+        await client.aclose()
+
+    await_args = ws_mock.send.await_args
+    assert await_args is not None
+    sent_payload = deserialize_from_msgpack(await_args.args[0])
+    for key, expected_shape in (
+        ("observation/images/main_image", (23, 37, 3)),
+        ("observation/images/left_wrist_image", (19, 29, 3)),
+        ("observation/images/right_wrist_image", (17, 31, 3)),
+    ):
+        value = sent_payload[key]
+        assert isinstance(value, bytes), f"{key} should be JPEG bytes"
+        assert simplejpeg.decode_jpeg(value).shape == expected_shape
 
 
 @pytest.mark.asyncio
@@ -213,8 +267,9 @@ async def test_reward_sends_default_value_when_server_supports_rewards() -> None
         await client.aclose()
 
     ws_mock.send.assert_called_once()
-    assert ws_mock.send.await_args is not None
-    sent_payload = deserialize_from_msgpack(ws_mock.send.await_args.args[0])
+    await_args = ws_mock.send.await_args
+    assert await_args is not None
+    sent_payload = deserialize_from_msgpack(await_args.args[0])
     assert sent_payload == {ENDPOINT_KEY: ENDPOINT_REWARD, REWARD_KEY: 1.0}
 
 
@@ -242,8 +297,9 @@ async def test_reward_includes_description_only_when_provided() -> None:
         await client.reward(2.5, "The box was successfully sealed")
         await client.aclose()
 
-    assert ws_mock.send.await_args is not None
-    sent_payload = deserialize_from_msgpack(ws_mock.send.await_args.args[0])
+    await_args = ws_mock.send.await_args
+    assert await_args is not None
+    sent_payload = deserialize_from_msgpack(await_args.args[0])
     assert sent_payload == {
         ENDPOINT_KEY: ENDPOINT_REWARD,
         REWARD_KEY: 2.5,

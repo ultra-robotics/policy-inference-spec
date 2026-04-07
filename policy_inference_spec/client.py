@@ -7,14 +7,13 @@ from typing import Any
 
 import numpy as np
 import numpy.typing as npt
-import simplejpeg  # type: ignore[import-untyped]
+import simplejpeg
 import websockets
 
 from policy_inference_spec.client_helpers import (
     DEFAULT_PREDICT_URL,
     _emit_server_error_verbatim,
     _log_server_config,
-    _server_image_resolution,
     _summarize_server_payload,
     _wire_camera_names,
     policy_ws_url,
@@ -117,17 +116,14 @@ class RemotePolicyClient:
                 sorted(server_camera_names),
             )
 
-    def _adapt_wire_frame_to_server_config(self, wire_frame: dict[str, Any]) -> dict[str, Any]:
-        image_resolution = _server_image_resolution(self._server_config)
-        if image_resolution is None:
-            return wire_frame
-
-        target_h, target_w = image_resolution
+    def _encode_wire_frame_images(self, wire_frame: dict[str, Any]) -> dict[str, Any]:
         adapted = dict(wire_frame)
         for key, value in wire_frame.items():
             if not key.startswith("observation/") or key == JOINT_STATE_KEY:
                 continue
-            field = encode_image(_wire_image_to_hwc_uint8(value), target_h, target_w, jpeg_quality=75)
+            if isinstance(value, bytes):
+                continue
+            field = encode_image(_wire_image_to_hwc_uint8(value), jpeg_quality=75)
             assert field.codec == "jpeg", f"{key} must use jpeg transport"
             adapted[key] = field.data
         return adapted
@@ -229,7 +225,7 @@ class RemotePolicyClient:
         try:
             await self._ensure_ws()
             assert self._ws is not None
-            wire_frame = self._adapt_wire_frame_to_server_config(wire_frame)
+            wire_frame = self._encode_wire_frame_images(wire_frame)
             validate_wire_inference_request_frame(wire_frame)
             self._warn_on_camera_name_mismatch(wire_frame)
             payload = serialize_to_msgpack(wire_frame)

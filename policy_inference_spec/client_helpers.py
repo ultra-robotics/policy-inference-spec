@@ -75,7 +75,3 @@ def _emit_server_error_verbatim(payload: Any) -> None:
         return
     if isinstance(payload, dict) and "error" in payload:
         print(_truncate_log_value(payload["error"], max_chars=400), file=sys.stderr, flush=True)
-
-
-def _server_image_resolution(server_config: ServerHandshake | None) -> tuple[int, int] | None:
-    return None if server_config is None else server_config.image_resolution
