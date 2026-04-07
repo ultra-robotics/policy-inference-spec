@@ -1,47 +1,126 @@
 # policy-inference-spec
 
-Shared Python package for policy inference over WebSocket: msgpack frames, numpy tagging, and strict validation of wire keys/shapes.
+Shared Python package for the current policy-inference wire format and helper code: WebSocket transport, msgpack + NumPy encoding, strict request/response validation, an async client, feature-engineering utilities, and a minimal example server.
 
 ## Install
 
-From a checkout of this repo:
+Requires Python 3.12+.
 
 ```bash
 pip install -e .
 ```
 
-## Wire protocol
+Optional test dependencies:
 
+```bash
+pip install -e '.[dev]'
+```
 
-- **Transport:** WebSocket, binary frames, **msgpack** payloads.
-- **Handshake:** client connects to `wss://<host>/ws` (or `ws://`). The server sends the **first** message: a **ServerHandshake** payload with camera names, image resolution when available, action-space metadata, and an optional `server_features` list.
-- **Auth:** clients that need an API key send header **`x-api-key`**.
-- **NumPy:** arrays are encoded with a **`__ndarray__`** tag: `data` (bytes), `dtype`, `shape` (see `serialize_to_msgpack` / `deserialize_from_msgpack` in `policy_inference_spec.codec`).
-- **Inference request** (msgpack dict): at minimum
-  - `observation/state` — float32 **ndarray** joint/state vector, **1-D** length 97, encoded with `__ndarray__`
-  - `observation/<camera_name>` — JPEG **bytes** (produced with `encode_image`)
-  - `prompt` — single language string for the policy
-  - `model_id` — policy id string (may be empty)
-- **Inference response:** `action` (2-D ndarray; second dim **25**), `inference_time` (server-side ms), and **`policy_id`** (string).
-- **Control:** `{"endpoint": "reset"}` → `{"status": "ok"}`; `{"endpoint": "telemetry", ...}` → `{"status": "ok"}`.
-- **Reward signal:** `{"endpoint": "reward", "reward": <float>, "description": <optional str>}`. Clients default `reward` to `1.0`. They only send this message when the handshake advertises `"rewards"` in `server_features`; otherwise the client drops the message and logs a warning.
+## Current Wire Protocol
 
-Strict validation helpers live in `policy_inference_spec.hardware_model` (`validate_wire_inference_request_frame`, `validate_wire_inference_response`).
-Wire constants, handshake types, and reward types live in `policy_inference_spec.protocol`.
+- **Transport:** WebSocket binary frames carrying msgpack payloads.
+- **URL handling:** `policy_ws_url()` accepts `ws://` and `wss://` URLs. If the path is empty or `/`, it rewrites the URL to end in `/ws`.
+- **Auth:** `RemotePolicyClient` forwards any `policy_auth_headers` as WebSocket headers. The included smoke test uses `x-api-key`.
+- **Handshake:** the server sends the first frame. `ServerHandshake` currently contains:
+  - `camera_names` (required `list[str]`)
+  - `image_resolution` (optional `[height, width]`)
+  - `action_space` (defaults to `"joint_position"`)
+  - `needs_wrist_camera` (defaults to `true`)
+  - `n_external_cameras` (defaults to `1`)
+  - `server_features` (optional `list[str]`)
+- **Current hardware model:** the package currently models only `HardwareModel.GEN2`:
+  - `state_dim = 97`
+  - `action_dim = 25`
+  - `image_resolution = (360, 640)`
+  - camera names:
+    - `images/main_image`
+    - `images/left_wrist_image`
+    - `images/right_wrist_image`
 
-## Features to be added in future
+### Inference Request
 
-- **H.264 / `__video_frame__`** streaming frames. This package handles **JPEG bytes** and **raw uint8 ndarray** images for `observation/*` keys.
-- **Real Time Chunking** support whereby action prefixes can be sent in the inference request
+`validate_wire_inference_request_frame()` requires an inference frame to contain exactly these keys:
 
-## Package layout
+- `observation/state`
+- `observation/images/main_image`
+- `observation/images/left_wrist_image`
+- `observation/images/right_wrist_image`
+- `prompt`
+- `model_id`
+
+Current validation rules:
+
+- `observation/state` must be a 1-D `numpy.ndarray` with shape `(97,)`.
+- `prompt` must be `str`.
+- `model_id` must be `str` and may be empty.
+- Each image field must be either JPEG `bytes` or a `numpy.ndarray`.
+- Extra keys are rejected, including `hardware_model`.
+- `endpoint` must not be present on inference frames.
+
+`RemotePolicyClient.predict()` accepts image arrays in HWC or single-item BHWC `uint8` format and converts them to JPEG bytes at quality 75 before sending. It does not resize images.
+
+### Msgpack / NumPy Encoding
+
+- `serialize_to_msgpack()` encodes `numpy.ndarray` values with a flat `__ndarray__` tag containing `data`, `dtype`, and `shape`.
+- `deserialize_from_msgpack()` reconstructs arrays from that tag.
+- The codec currently supports only `uint8` and `float32` ndarrays.
+- `encode_image()` produces JPEG bytes plus shape/dtype metadata in an `NdarrayField`, but the current `RemotePolicyClient` sends raw JPEG bytes on the wire for image observations.
+
+### Inference Response
+
+`validate_wire_inference_response()` currently requires:
+
+- `action`: 2-D floating `numpy.ndarray` whose second dimension is `25`
+- `context_embeddings`: floating `numpy.ndarray` with shape `(2, 128)`
+
+Optional response fields:
+
+- `inference_time`: numeric
+- `policy_id`: `str`
+
+`RemotePolicyClient.predict()` returns a `RemotePolicyPrediction` with:
+
+- `actions_d`
+- `context_embeddings`
+- `total_latency_ms`
+- `policy_id`
+
+### Reward And Control Messages
+
+- `RemotePolicyClient.reward(value=1.0, description=None)` sends `{"endpoint": "reward", ...}` only if the handshake advertises `"rewards"` in `server_features`.
+- If the server does not advertise reward support, the client drops the message and logs a warning.
+- `RewardSignal` serializes to:
+  - `{"endpoint": "reward", "reward": <float>}`
+  - optionally with `"description": <str>`
+- The example server acknowledges rewards with `{"endpoint": "reward", "status": "ok", "reward": ...}` and echoes `description` when present.
+- `ENDPOINT_RESET` and `ENDPOINT_TELEMETRY` constants exist in the protocol, and the example server replies `{"status": "ok"}` to those messages. There are no dedicated reset/telemetry client helpers in the current package.
+
+## Included Modules
 
 | Module | Role |
 |--------|------|
-| `protocol.py` | Shared wire keys, handshake/reward dataclasses, server-feature enums, and protocol type aliases |
-| `codec.py` | `encode_image`, `serialize_to_msgpack`, `deserialize_from_msgpack`, and ndarray msgpack tagging |
-| `hardware_model.py` | Hardware-model-aware shapes and strict request/response validation |
-| `client.py` | `RemotePolicyClient` (async transport + validation), `policy_ws_url`, and reward sending |
+| `policy_inference_spec.protocol` | Wire keys, handshake and reward dataclasses, server-feature enum, and protocol type aliases |
+| `policy_inference_spec.codec` | Msgpack codec, ndarray tagging, and JPEG image encoding helper |
+| `policy_inference_spec.hardware_model` | `gen2` hardware-model metadata and strict request/response validators |
+| `policy_inference_spec.client` | Async `RemotePolicyClient`, prediction result type, restart error, and URL normalization helper |
+| `policy_inference_spec.client_helpers` | Default predict URL and logging / payload helper functions used by the client |
+| `policy_inference_spec.feature_engineering` | Feature-bundle schemas, action parsing, and image preprocessing utilities for training/data prep |
+| `policy_inference_spec.smoke` | Smoke-test CLI for sending example predict requests |
+| `server.minimal` | Minimal example inference server and example linear policy |
+
+## Quick Checks
+
+Run tests:
+
+```bash
+uv run --extra dev pytest tests/ -q
+```
+
+Run the smoke test against the local example server:
+
+```bash
+uv run python -m policy_inference_spec.smoke
+```
 
 ## License
 
