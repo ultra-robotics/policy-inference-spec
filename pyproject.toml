@@ -12,6 +12,11 @@ dependencies = [
     "torch>=2.0",
     "websockets>=15.0.1",
     "opencv-contrib-python-headless==4.10.*",
+    "av>=16.0.1",
+    "pandas>=2.2",
+    "rerun-sdk==0.30.2",
+    "typer==0.12.*",
+    "click<8.2.0",
 ]
 
 [project.optional-dependencies]
