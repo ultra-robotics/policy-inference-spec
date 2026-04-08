@@ -8,3 +8,7 @@ test:
 # Example remote usage: `just smoke --url ws://127.0.0.1:8765/ws --predicts 3`
 smoke *args:
     cd "{{justfile_directory()}}/.." && uv run python -m policy_inference_spec.smoke {{args}}
+
+# Replay a local .rrd recording against a policy server and write an output .rrd.
+replay-rrd *args:
+    cd "{{justfile_directory()}}/.." && uv run python -m policy_inference_spec.replay_rrd {{args}}
