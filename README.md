@@ -122,12 +122,22 @@ Example server helpers live in the sibling `server` package:
 from server.minimal import (
     example_policy_actions,
     handle_inference_connection,
+    main,
     run_example_server,
     server_handshake_config,
 )
 ```
 
-`server.minimal` does not currently expose a `python -m` CLI. It is an importable example server module.
+`server.minimal` is both importable and runnable as a module:
+
+```bash
+uv run python -m server.minimal
+uv run python -m server.minimal --host 127.0.0.1 --port 18090
+uv run python -m server.minimal --host 127.0.0.1 --port 18090 --action-horizon 50
+uv run python -m server.minimal --no-rewards
+```
+
+The CLI defaults to `--action-horizon 50` so it works with `policy_inference_spec.replay_rrd` out of the box. The importable `run_example_server()` helper still defaults to a shorter horizon of `4` unless you override `action_horizon=...`.
 
 ### Repository helper commands
 
@@ -309,6 +319,12 @@ Replay a recording against a server:
 uv run python -m policy_inference_spec.replay_rrd \
   --recording-path ~/local_data/recordings/example.rrd \
   --predict-url ws://127.0.0.1:18090/ws
+```
+
+Run the minimal example server in another terminal:
+
+```bash
+uv run python -m server.minimal --host 127.0.0.1 --port 18090
 ```
 
 ## License
