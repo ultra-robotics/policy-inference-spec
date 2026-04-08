@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-import simplejpeg  # type: ignore[import-untyped]
+import simplejpeg
 from typing import Any, cast
 
 from policy_inference_spec.client import RemotePolicyClient
@@ -16,7 +16,14 @@ from policy_inference_spec.protocol import (
     PROMPT_KEY,
     ServerFeature,
 )
-from server.minimal import EXAMPLE_POLICY_ID, example_policy_actions, run_example_server, server_handshake_config
+from server.minimal import (
+    EXAMPLE_POLICY_ID,
+    _cli_server_features,
+    _parse_args,
+    example_policy_actions,
+    run_example_server,
+    server_handshake_config,
+)
 
 pytestmark = pytest.mark.asyncio
 
@@ -74,3 +81,26 @@ async def test_client_reward_is_dropped_when_example_server_does_not_advertise_r
                 await client.reward(1.5, "ignored")
 
     assert "Dropping reward because server does not advertise rewards support" in caplog.text
+
+
+async def test_example_server_cli_arg_parsing() -> None:
+    args = _parse_args(["--host", "0.0.0.0", "--port", "19090", "--action-horizon", "50", "--no-rewards"])
+
+    assert args.host == "0.0.0.0"
+    assert args.port == 19090
+    assert args.action_horizon == 50
+    assert args.no_rewards is True
+    assert _cli_server_features(args.no_rewards) == ()
+    assert _cli_server_features(False) == (ServerFeature.REWARDS,)
+
+
+async def test_run_example_server_supports_explicit_host_and_port() -> None:
+    frame = _random_predict_frame()
+    async with run_example_server(host="127.0.0.1", port=0, action_horizon=8) as url:
+        assert url.startswith("ws://127.0.0.1:")
+        client = RemotePolicyClient(url)
+        async with client:
+            pred = await client.predict(frame)
+
+    assert pred.policy_id == EXAMPLE_POLICY_ID
+    assert pred.actions_d.shape == (8, DEFAULT_HARDWARE_MODEL.action_dim)
