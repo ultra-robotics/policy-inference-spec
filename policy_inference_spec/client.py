@@ -24,11 +24,15 @@ from policy_inference_spec.protocol import (
     ACTION_KEY,
     CONTEXT_EMBEDDINGS_KEY,
     ENDPOINT_KEY,
+    ENDPOINT_INTERVENTION_CHUNK,
     ENDPOINT_REWARD,
     INFERENCE_TIME_KEY,
+    INTERVENTION_ACTION_KEY,
+    InterventionChunk,
     JOINT_STATE_KEY,
     REWARD_KEY,
     RewardSignal,
+    REQUEST_ID_KEY,
     STATUS_KEY,
     ServerFeature,
     ServerHandshake,
@@ -220,6 +224,31 @@ class RemotePolicyClient:
         if response.get(ENDPOINT_KEY) == ENDPOINT_REWARD:
             reward_ack = response.get(REWARD_KEY)
             assert reward_ack is None or isinstance(reward_ack, (int, float)), f"{REWARD_KEY} must be numeric"
+
+    async def send_intervention_chunk(self, intervention_action_hd: npt.NDArray[np.float32], request_id: str) -> None:
+        await self._ensure_ws()
+        assert self._ws is not None
+        chunk = InterventionChunk(
+            intervention_action_hd=np.asarray(intervention_action_hd, dtype=np.float32),
+            request_id=request_id,
+        )
+        await self._ws.send(serialize_to_msgpack(chunk.to_payload()))
+        response_raw = await self._ws.recv()
+        if isinstance(response_raw, str):
+            _emit_server_error_verbatim(response_raw)
+            raise AssertionError("unexpected text response from inference server")
+        response = deserialize_from_msgpack(response_raw)
+        _emit_server_error_verbatim(response)
+        assert isinstance(response, dict), f"unexpected intervention response type {type(response)}"
+        assert response.get(STATUS_KEY) == "ok", f"unexpected intervention response payload: {response}"
+        assert response.get(ENDPOINT_KEY) == ENDPOINT_INTERVENTION_CHUNK, (
+            f"unexpected intervention response endpoint: {response}"
+        )
+        intervention_ack = response.get(INTERVENTION_ACTION_KEY)
+        assert intervention_ack is None or isinstance(intervention_ack, np.ndarray), (
+            f"{INTERVENTION_ACTION_KEY} must be ndarray when present"
+        )
+        assert response.get(REQUEST_ID_KEY) == request_id, f"unexpected intervention request id in response: {response}"
 
     async def predict(self, wire_frame: dict[str, Any]) -> RemotePolicyPrediction:
         try:

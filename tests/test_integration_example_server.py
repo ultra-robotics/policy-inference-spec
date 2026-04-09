@@ -8,12 +8,14 @@ from typing import Any, cast
 from policy_inference_spec.client import RemotePolicyClient
 from policy_inference_spec.hardware_model import DEFAULT_HARDWARE_MODEL
 from policy_inference_spec.protocol import (
+    CONTROL_SOURCE_KEY,
     CONTEXT_EMBEDDINGS_KEY,
     CONTEXT_EMBEDDING_TOKENS,
     CONTEXT_EMBEDDING_WIDTH,
     JOINT_STATE_KEY,
     MODEL_ID_KEY,
     PROMPT_KEY,
+    REQUEST_ID_KEY,
     ServerFeature,
 )
 from server.minimal import EXAMPLE_POLICY_ID, example_policy_actions, run_example_server, server_handshake_config
@@ -28,6 +30,8 @@ def _random_predict_frame() -> dict[str, object]:
         JOINT_STATE_KEY: rng.standard_normal(DEFAULT_HARDWARE_MODEL.state_dim, dtype=np.float32),
         PROMPT_KEY: "",
         MODEL_ID_KEY: "",
+        CONTROL_SOURCE_KEY: "POLICY",
+        REQUEST_ID_KEY: "req-example",
     }
     for cam in DEFAULT_HARDWARE_MODEL.cameras:
         rgb = rng.integers(0, 256, size=(height, width, 3), dtype=np.uint8)

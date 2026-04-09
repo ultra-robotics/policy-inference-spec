@@ -23,16 +23,20 @@ from policy_inference_spec.hardware_model import (
 from policy_inference_spec.codec import deserialize_from_msgpack, serialize_to_msgpack
 from policy_inference_spec.protocol import (
     ACTION_KEY,
+    CONTROL_SOURCE_KEY,
     CONTEXT_EMBEDDINGS_KEY,
     CONTEXT_EMBEDDING_TOKENS,
     CONTEXT_EMBEDDING_WIDTH,
     ENDPOINT_KEY,
+    ENDPOINT_INTERVENTION_CHUNK,
     ENDPOINT_REWARD,
     INFERENCE_TIME_KEY,
+    INTERVENTION_ACTION_KEY,
     JOINT_STATE_KEY,
     MODEL_ID_KEY,
     POLICY_ID_KEY,
     PROMPT_KEY,
+    REQUEST_ID_KEY,
     REWARD_DESCRIPTION_KEY,
     REWARD_KEY,
     STATUS_KEY,
@@ -50,6 +54,8 @@ def _valid_wire_frame() -> dict[str, Any]:
         JOINT_STATE_KEY: np.zeros(DEFAULT_HARDWARE_MODEL.state_dim, dtype=np.float32),
         PROMPT_KEY: "test",
         MODEL_ID_KEY: "",
+        CONTROL_SOURCE_KEY: "POLICY",
+        REQUEST_ID_KEY: "req-1",
     }
     for camera in DEFAULT_HARDWARE_MODEL.cameras:
         frame[f"observation/{camera}"] = jpeg
@@ -157,6 +163,8 @@ async def test_predict_jpeg_encodes_ndarray_images_without_resizing() -> None:
         JOINT_STATE_KEY: np.zeros(DEFAULT_HARDWARE_MODEL.state_dim, dtype=np.float32),
         PROMPT_KEY: "test",
         MODEL_ID_KEY: "",
+        CONTROL_SOURCE_KEY: "POLICY",
+        REQUEST_ID_KEY: "req-ndarray",
         "observation/images/main_image": np.zeros((23, 37, 3), dtype=np.uint8),
         "observation/images/left_wrist_image": np.zeros((19, 29, 3), dtype=np.uint8),
         "observation/images/right_wrist_image": np.zeros((17, 31, 3), dtype=np.uint8),
@@ -241,12 +249,40 @@ def test_validate_wire_inference_request_frame_rejects_hardware_model_field() ->
         JOINT_STATE_KEY: np.zeros(DEFAULT_HARDWARE_MODEL.state_dim, dtype=np.float32),
         PROMPT_KEY: "test",
         MODEL_ID_KEY: "",
+        CONTROL_SOURCE_KEY: "POLICY",
+        REQUEST_ID_KEY: "req-invalid",
     }
     for camera in DEFAULT_HARDWARE_MODEL.cameras:
         frame[f"observation/{camera}"] = jpeg
 
     with pytest.raises(AssertionError, match="wire inference keys"):
         validate_wire_inference_request_frame(frame)
+
+
+@pytest.mark.asyncio
+async def test_send_intervention_chunk_round_trip_with_mock_websocket() -> None:
+    cfg = serialize_to_msgpack(_server_handshake_payload())
+    ack = serialize_to_msgpack({ENDPOINT_KEY: ENDPOINT_INTERVENTION_CHUNK, STATUS_KEY: "ok", REQUEST_ID_KEY: "req-2"})
+    ws_mock = MagicMock()
+    ws_mock.recv = AsyncMock(side_effect=[cfg, ack])
+    ws_mock.send = AsyncMock()
+    ws_mock.close = AsyncMock()
+
+    async def fake_connect(*_a: object, **_kw: object) -> MagicMock:
+        return ws_mock
+
+    intervention_action_hd = np.zeros((50, DEFAULT_HARDWARE_MODEL.action_dim), dtype=np.float32)
+    with patch("policy_inference_spec.client.websockets.connect", side_effect=fake_connect):
+        client = RemotePolicyClient("ws://127.0.0.1:9/ws")
+        await client.send_intervention_chunk(intervention_action_hd, "req-2")
+        await client.aclose()
+
+    await_args = ws_mock.send.await_args
+    assert await_args is not None
+    sent_payload = deserialize_from_msgpack(await_args.args[0])
+    assert sent_payload[ENDPOINT_KEY] == ENDPOINT_INTERVENTION_CHUNK
+    assert np.array_equal(sent_payload[INTERVENTION_ACTION_KEY], intervention_action_hd)
+    assert sent_payload[REQUEST_ID_KEY] == "req-2"
 
 
 @pytest.mark.asyncio

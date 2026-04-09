@@ -12,6 +12,8 @@ DEFAULT_INFERENCE_SERVER_PORT = 18090
 
 JOINT_STATE_KEY = "observation/state"
 PROMPT_KEY = "prompt"
+CONTROL_SOURCE_KEY = "control_source"
+REQUEST_ID_KEY = "request_id"
 ACTION_KEY = "action"
 CONTEXT_EMBEDDINGS_KEY = "context_embeddings"
 INFERENCE_TIME_KEY = "inference_time"
@@ -19,10 +21,12 @@ ENDPOINT_KEY = "endpoint"
 ENDPOINT_RESET = "reset"
 ENDPOINT_TELEMETRY = "telemetry"
 ENDPOINT_REWARD = "reward"
+ENDPOINT_INTERVENTION_CHUNK = "intervention_chunk"
 MODEL_ID_KEY = "model_id"
 POLICY_ID_KEY = "policy_id"
 REWARD_KEY = "reward"
 REWARD_DESCRIPTION_KEY = "description"
+INTERVENTION_ACTION_KEY = "intervention_action"
 
 CAMERA_NAMES_KEY = "camera_names"
 IMAGE_RESOLUTION_KEY = "image_resolution"
@@ -44,6 +48,11 @@ ProtocolPayload: TypeAlias = dict[str, ProtocolValue]
 
 class ServerFeature(StrEnum):
     REWARDS = "rewards"
+
+
+class ControlSource(StrEnum):
+    POLICY = "POLICY"
+    INTERVENTION = "INTERVENTION"
 
 
 def _normalize_server_features(features: Iterable[str | ServerFeature]) -> tuple[str, ...]:
@@ -175,6 +184,43 @@ class RewardSignal:
         return cls(reward=float(reward), description=description)
 
 
+@dataclass(frozen=True)
+class InterventionChunk:
+    intervention_action_hd: FloatArray
+    request_id: str
+
+    def __post_init__(self) -> None:
+        assert isinstance(self.intervention_action_hd, np.ndarray), (
+            f"{INTERVENTION_ACTION_KEY} must be ndarray, got {type(self.intervention_action_hd)}"
+        )
+        assert self.intervention_action_hd.ndim == 2, (
+            f"{INTERVENTION_ACTION_KEY} must be 2-D, got {self.intervention_action_hd.shape}"
+        )
+        assert np.issubdtype(self.intervention_action_hd.dtype, np.floating), (
+            f"{INTERVENTION_ACTION_KEY} must be floating ndarray, got {self.intervention_action_hd.dtype}"
+        )
+        assert isinstance(self.request_id, str) and self.request_id, f"{REQUEST_ID_KEY} must be a non-empty str"
+
+    def to_payload(self) -> ProtocolPayload:
+        return {
+            ENDPOINT_KEY: ENDPOINT_INTERVENTION_CHUNK,
+            INTERVENTION_ACTION_KEY: np.asarray(self.intervention_action_hd, dtype=np.float32),
+            REQUEST_ID_KEY: self.request_id,
+        }
+
+    @classmethod
+    def from_payload(cls, payload: Mapping[str, Any]) -> InterventionChunk:
+        assert isinstance(payload, Mapping), f"intervention chunk payload must be mapping, got {type(payload)}"
+        assert payload.get(ENDPOINT_KEY) == ENDPOINT_INTERVENTION_CHUNK, (
+            f"{ENDPOINT_KEY} must be {ENDPOINT_INTERVENTION_CHUNK!r}, got {payload.get(ENDPOINT_KEY)!r}"
+        )
+        intervention_action = payload.get(INTERVENTION_ACTION_KEY)
+        assert intervention_action is not None, f"{INTERVENTION_ACTION_KEY} must be present"
+        request_id = payload.get(REQUEST_ID_KEY)
+        assert isinstance(request_id, str) and request_id, f"{REQUEST_ID_KEY} must be a non-empty str"
+        return cls(intervention_action_hd=np.asarray(intervention_action, dtype=np.float32), request_id=request_id)
+
+
 __all__ = [
     "ACTION_KEY",
     "ACTION_SPACE_KEY",
@@ -182,8 +228,11 @@ __all__ = [
     "CONTEXT_EMBEDDINGS_KEY",
     "CONTEXT_EMBEDDING_TOKENS",
     "CONTEXT_EMBEDDING_WIDTH",
+    "CONTROL_SOURCE_KEY",
+    "ControlSource",
     "DEFAULT_INFERENCE_SERVER_PORT",
     "ENDPOINT_KEY",
+    "ENDPOINT_INTERVENTION_CHUNK",
     "ENDPOINT_RESET",
     "ENDPOINT_REWARD",
     "ENDPOINT_TELEMETRY",
@@ -193,6 +242,8 @@ __all__ = [
     "ImageArray",
     "INFERENCE_TIME_KEY",
     "InferenceMetadataValue",
+    "INTERVENTION_ACTION_KEY",
+    "InterventionChunk",
     "JOINT_STATE_KEY",
     "MODEL_ID_KEY",
     "N_EXTERNAL_CAMERAS_KEY",
@@ -201,6 +252,7 @@ __all__ = [
     "PROMPT_KEY",
     "ProtocolPayload",
     "ProtocolValue",
+    "REQUEST_ID_KEY",
     "REWARD_DESCRIPTION_KEY",
     "REWARD_KEY",
     "RewardSignal",

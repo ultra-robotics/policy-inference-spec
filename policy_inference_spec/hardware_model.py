@@ -10,15 +10,18 @@ import numpy.typing as npt
 
 from policy_inference_spec.protocol import (
     ACTION_KEY,
+    CONTROL_SOURCE_KEY,
     CONTEXT_EMBEDDINGS_KEY,
     CONTEXT_EMBEDDING_TOKENS,
     CONTEXT_EMBEDDING_WIDTH,
+    ControlSource,
     ENDPOINT_KEY,
     INFERENCE_TIME_KEY,
     JOINT_STATE_KEY,
     MODEL_ID_KEY,
     POLICY_ID_KEY,
     PROMPT_KEY,
+    REQUEST_ID_KEY,
     ServerFeature,
     ServerHandshake,
     make_server_handshake,
@@ -126,6 +129,8 @@ def _wire_inference_request_keys(*, hardware_model: HardwareModel = DEFAULT_HARD
             *_observation_keys(hardware_model),
             PROMPT_KEY,
             MODEL_ID_KEY,
+            CONTROL_SOURCE_KEY,
+            REQUEST_ID_KEY,
         }
     )
 
@@ -177,6 +182,10 @@ def validate_wire_inference_request_frame(
     assert keys == allowed, f"wire inference keys {keys} != expected {allowed}"
     assert isinstance(frame[PROMPT_KEY], str), f"{PROMPT_KEY} must be str"
     assert isinstance(frame[MODEL_ID_KEY], str), f"{MODEL_ID_KEY} must be str"
+    assert isinstance(frame[REQUEST_ID_KEY], str) and frame[REQUEST_ID_KEY], f"{REQUEST_ID_KEY} must be a non-empty str"
+    control_source = frame[CONTROL_SOURCE_KEY]
+    assert isinstance(control_source, str), f"{CONTROL_SOURCE_KEY} must be str"
+    ControlSource(control_source)
     _validate_joint_position_array(frame[JOINT_STATE_KEY], hardware_model)
     for k in _observation_keys(hardware_model):
         v = frame[k]

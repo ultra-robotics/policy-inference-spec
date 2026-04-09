@@ -15,8 +15,11 @@ from policy_inference_spec.protocol import (
     CONTEXT_EMBEDDING_TOKENS,
     CONTEXT_EMBEDDING_WIDTH,
     ENDPOINT_KEY,
+    ENDPOINT_INTERVENTION_CHUNK,
     ENDPOINT_REWARD,
     FloatArray,
+    INTERVENTION_ACTION_KEY,
+    InterventionChunk,
     ProtocolPayload,
     REWARD_DESCRIPTION_KEY,
     REWARD_KEY,
@@ -147,3 +150,14 @@ def test_reward_signal_round_trip_with_optional_description() -> None:
         REWARD_KEY: 1.5,
         REWARD_DESCRIPTION_KEY: "The box was successfully sealed",
     }
+
+
+def test_intervention_chunk_round_trip() -> None:
+    intervention_action_hd = np.zeros((50, 25), dtype=np.float32)
+    intervention_chunk = InterventionChunk(intervention_action_hd=intervention_action_hd, request_id="req-protocol")
+    decoded = InterventionChunk.from_payload(intervention_chunk.to_payload())
+
+    assert np.array_equal(decoded.intervention_action_hd, intervention_action_hd)
+    assert decoded.request_id == "req-protocol"
+    assert np.array_equal(intervention_chunk.to_payload()[INTERVENTION_ACTION_KEY], intervention_action_hd)
+    assert intervention_chunk.to_payload()[ENDPOINT_KEY] == ENDPOINT_INTERVENTION_CHUNK
