@@ -13,6 +13,8 @@ from policy_inference_spec.protocol import (
     CONTEXT_EMBEDDINGS_KEY,
     CONTEXT_EMBEDDING_TOKENS,
     CONTEXT_EMBEDDING_WIDTH,
+    DUMB_REWARD_GOAL_ACTION_CHUNK_KEY,
+    DUMB_REWARD_THRESHOLD_KEY,
     ENDPOINT_KEY,
     INFERENCE_TIME_KEY,
     JOINT_STATE_KEY,
@@ -130,6 +132,10 @@ def _wire_inference_request_keys(*, hardware_model: HardwareModel = DEFAULT_HARD
     )
 
 
+def _optional_wire_inference_request_keys() -> frozenset[str]:
+    return frozenset({DUMB_REWARD_GOAL_ACTION_CHUNK_KEY, DUMB_REWARD_THRESHOLD_KEY})
+
+
 def server_handshake_for_hardware_model(
     hardware_model: str | HardwareModel = DEFAULT_HARDWARE_MODEL,
     *,
@@ -172,11 +178,30 @@ def validate_wire_inference_request_frame(
     frame: dict[str, Any], hardware_model: HardwareModel = DEFAULT_HARDWARE_MODEL
 ) -> HardwareModel:
     assert ENDPOINT_KEY not in frame, "inference frame must not contain endpoint"
-    allowed = _wire_inference_request_keys(hardware_model=hardware_model)
+    required = _wire_inference_request_keys(hardware_model=hardware_model)
+    allowed = required | _optional_wire_inference_request_keys()
     keys = set(frame.keys())
-    assert keys == allowed, f"wire inference keys {keys} != expected {allowed}"
+    assert required <= keys <= allowed, f"wire inference keys {keys} must include {required} and stay within {allowed}"
     assert isinstance(frame[PROMPT_KEY], str), f"{PROMPT_KEY} must be str"
     assert isinstance(frame[MODEL_ID_KEY], str), f"{MODEL_ID_KEY} must be str"
+    has_goal_chunk = DUMB_REWARD_GOAL_ACTION_CHUNK_KEY in frame
+    has_threshold = DUMB_REWARD_THRESHOLD_KEY in frame
+    assert has_goal_chunk == has_threshold, (
+        f"{DUMB_REWARD_GOAL_ACTION_CHUNK_KEY} and {DUMB_REWARD_THRESHOLD_KEY} must be provided together"
+    )
+    if has_goal_chunk:
+        goal_action_chunk = frame[DUMB_REWARD_GOAL_ACTION_CHUNK_KEY]
+        assert isinstance(goal_action_chunk, np.ndarray), f"{DUMB_REWARD_GOAL_ACTION_CHUNK_KEY} must be ndarray"
+        assert goal_action_chunk.ndim == 2, f"{DUMB_REWARD_GOAL_ACTION_CHUNK_KEY} must be 2-D, got {goal_action_chunk.shape}"
+        assert goal_action_chunk.shape[1] == hardware_model.action_dim, (
+            f"{DUMB_REWARD_GOAL_ACTION_CHUNK_KEY} second dim must be {hardware_model.action_dim}, got {goal_action_chunk.shape}"
+        )
+        assert np.issubdtype(goal_action_chunk.dtype, np.floating), (
+            f"{DUMB_REWARD_GOAL_ACTION_CHUNK_KEY} must be floating ndarray, got {goal_action_chunk.dtype}"
+        )
+        threshold = frame[DUMB_REWARD_THRESHOLD_KEY]
+        assert isinstance(threshold, (int, float)), f"{DUMB_REWARD_THRESHOLD_KEY} must be numeric"
+        assert float(threshold) > 0.0, f"{DUMB_REWARD_THRESHOLD_KEY} must be positive"
     _validate_joint_position_array(frame[JOINT_STATE_KEY], hardware_model)
     for k in _observation_keys(hardware_model):
         v = frame[k]

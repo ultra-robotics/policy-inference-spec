@@ -14,6 +14,8 @@ from policy_inference_spec.protocol import (
     CONTEXT_EMBEDDINGS_KEY,
     CONTEXT_EMBEDDING_TOKENS,
     CONTEXT_EMBEDDING_WIDTH,
+    DUMB_REWARD_GOAL_ACTION_CHUNK_KEY,
+    DUMB_REWARD_THRESHOLD_KEY,
     ENDPOINT_KEY,
     ENDPOINT_REWARD,
     FloatArray,
@@ -147,3 +149,17 @@ def test_reward_signal_round_trip_with_optional_description() -> None:
         REWARD_KEY: 1.5,
         REWARD_DESCRIPTION_KEY: "The box was successfully sealed",
     }
+
+
+def test_serialize_to_msgpack_accepts_optional_dumb_reward_goal_chunk_and_threshold() -> None:
+    payload: ProtocolPayload = {
+        DUMB_REWARD_GOAL_ACTION_CHUNK_KEY: np.zeros((2, 25), dtype=np.float32),
+        DUMB_REWARD_THRESHOLD_KEY: 0.25,
+    }
+
+    decoded = deserialize_from_msgpack(serialize_to_msgpack(payload))
+
+    decoded_goal_action_chunk_hd = decoded[DUMB_REWARD_GOAL_ACTION_CHUNK_KEY]
+    assert isinstance(decoded_goal_action_chunk_hd, np.ndarray)
+    assert decoded_goal_action_chunk_hd.shape == (2, 25)
+    assert decoded[DUMB_REWARD_THRESHOLD_KEY] == pytest.approx(0.25)

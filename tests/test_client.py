@@ -26,6 +26,8 @@ from policy_inference_spec.protocol import (
     CONTEXT_EMBEDDINGS_KEY,
     CONTEXT_EMBEDDING_TOKENS,
     CONTEXT_EMBEDDING_WIDTH,
+    DUMB_REWARD_GOAL_ACTION_CHUNK_KEY,
+    DUMB_REWARD_THRESHOLD_KEY,
     ENDPOINT_KEY,
     ENDPOINT_REWARD,
     INFERENCE_TIME_KEY,
@@ -131,6 +133,43 @@ async def test_predict_round_trip_with_mock_websocket() -> None:
     assert pred.total_latency_ms >= 0.0
     ws_mock.send.assert_called_once()
     assert ws_mock.recv.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_predict_preserves_optional_dumb_reward_goal_chunk_and_threshold() -> None:
+    cfg = serialize_to_msgpack(_server_handshake_payload())
+    resp = serialize_to_msgpack(
+        {
+            ACTION_KEY: np.zeros((1, DEFAULT_HARDWARE_MODEL.action_dim), dtype=np.float32),
+            CONTEXT_EMBEDDINGS_KEY: np.zeros((CONTEXT_EMBEDDING_TOKENS, CONTEXT_EMBEDDING_WIDTH), dtype=np.float32),
+            POLICY_ID_KEY: "policy-1",
+        }
+    )
+    ws_mock = MagicMock()
+    ws_mock.recv = AsyncMock(side_effect=[cfg, resp])
+    ws_mock.send = AsyncMock()
+    ws_mock.close = AsyncMock()
+
+    async def fake_connect(*_a: object, **_kw: object) -> MagicMock:
+        return ws_mock
+
+    frame = _valid_wire_frame()
+    frame[DUMB_REWARD_GOAL_ACTION_CHUNK_KEY] = np.full((2, DEFAULT_HARDWARE_MODEL.action_dim), 0.75, dtype=np.float32)
+    frame[DUMB_REWARD_THRESHOLD_KEY] = 0.5
+    with patch("policy_inference_spec.client.websockets.connect", side_effect=fake_connect):
+        client = RemotePolicyClient("ws://127.0.0.1:9/ws")
+        await client.predict(frame)
+        await client.aclose()
+
+    await_args = ws_mock.send.await_args
+    assert await_args is not None
+    sent_payload = deserialize_from_msgpack(await_args.args[0])
+    sent_goal_action_chunk_hd = np.asarray(sent_payload[DUMB_REWARD_GOAL_ACTION_CHUNK_KEY], dtype=np.float32)
+    np.testing.assert_allclose(
+        sent_goal_action_chunk_hd,
+        np.full((2, DEFAULT_HARDWARE_MODEL.action_dim), 0.75, dtype=np.float32),
+    )
+    assert sent_payload[DUMB_REWARD_THRESHOLD_KEY] == pytest.approx(0.5)
 
 
 @pytest.mark.asyncio
