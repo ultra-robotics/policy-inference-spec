@@ -23,6 +23,8 @@ MODEL_ID_KEY = "model_id"
 POLICY_ID_KEY = "policy_id"
 DUMB_REWARD_GOAL_ACTION_CHUNK_KEY = "dumb_reward_goal_action_chunk"
 DUMB_REWARD_THRESHOLD_KEY = "dumb_reward_threshold"
+FAST_MOCK_ACTION_DIM_KEY = "fast_mock_action_dim"
+FAST_MOCK_ACTION_HORIZON_KEY = "fast_mock_action_horizon"
 REWARD_KEY = "reward"
 REWARD_DESCRIPTION_KEY = "description"
 
@@ -192,6 +194,8 @@ __all__ = [
     "ENDPOINT_REWARD",
     "ENDPOINT_TELEMETRY",
     "ERROR_KEY",
+    "FAST_MOCK_ACTION_DIM_KEY",
+    "FAST_MOCK_ACTION_HORIZON_KEY",
     "FloatArray",
     "IMAGE_RESOLUTION_KEY",
     "ImageArray",
