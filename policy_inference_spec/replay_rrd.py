@@ -32,6 +32,7 @@ DEFAULT_RECORDING_PATH = Path(
 ).expanduser()
 DEFAULT_OUTPUT_PATH = Path("output.rrd")
 DEFAULT_POLICY_ID = "ultra-ai/bc-nextgen-v0/just-rings-bigger-3:v24"
+DEFAULT_PROMPT = "tower_stack_unstack;stack rings"
 DEFAULT_PREDICT_URL = f"ws://127.0.0.1:{DEFAULT_INFERENCE_SERVER_PORT}/ws"
 RERUN_APP_ID = "offline_policy_eval_predictions"
 IMAGE_STREAMS = ("head", "left_wrist", "right_wrist")
@@ -177,6 +178,7 @@ async def predict_sample(
     sample: dict[str, np.ndarray | pd.Timestamp],
     predict_url: str,
     policy_id: str,
+    prompt: str,
 ) -> RemotePolicyPrediction:
     arrays: dict[str, np.ndarray] = {}
     for key, value in sample.items():
@@ -189,7 +191,7 @@ async def predict_sample(
         return await inference_client.predict(
             {
                 JOINT_STATE_KEY: processed_sample["observation.state"],
-                PROMPT_KEY: "",
+                PROMPT_KEY: prompt,
                 MODEL_ID_KEY: policy_id,
                 "observation/images/main_image": processed_sample["head"],
                 "observation/images/left_wrist_image": processed_sample["left_wrist"],
@@ -353,6 +355,7 @@ async def replay_recording(
     output_path: Path = DEFAULT_OUTPUT_PATH,
     predict_url: str = DEFAULT_PREDICT_URL,
     policy_id: str = DEFAULT_POLICY_ID,
+    prompt: str = DEFAULT_PROMPT,
     hz: int = 50,
     prediction_hz: float = 1.0,
     max_samples: int = 250,
@@ -374,7 +377,9 @@ async def replay_recording(
         if index >= max_samples:
             break
         samples.append(sample)
-        prediction_tasks.append(asyncio.create_task(predict_sample(feature_bundle, sample, predict_url, policy_id)))
+        prediction_tasks.append(
+            asyncio.create_task(predict_sample(feature_bundle, sample, predict_url, policy_id, prompt))
+        )
         await asyncio.sleep(0)
 
     assert samples, f"No replay samples were produced from {recording_path}"
@@ -421,6 +426,7 @@ def main(
         help="Inference server WebSocket URL.",
     ),
     policy_id: str = typer.Option(DEFAULT_POLICY_ID, help="Model id sent in each request."),
+    prompt: str = typer.Option(DEFAULT_PROMPT, help="Unified prompt in format task;subtask."),
     hz: int = typer.Option(50, min=1, help="Input sample rate."),
     prediction_hz: float = typer.Option(1.0, min=0.001, help="Prediction rate."),
     max_samples: int = typer.Option(250, min=1, help="Maximum replay windows."),
@@ -433,6 +439,7 @@ def main(
             output_path=output_path,
             predict_url=predict_url,
             policy_id=policy_id,
+            prompt=prompt,
             hz=hz,
             prediction_hz=prediction_hz,
             max_samples=max_samples,
