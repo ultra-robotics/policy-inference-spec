@@ -67,7 +67,7 @@ async def test_client_reward_round_trip_against_example_server() -> None:
     async with run_example_server() as url:
         client = RemotePolicyClient(url)
         async with client:
-            await client.reward(1.5, "The box was successfully sealed")
+            await client.reward([1.5], "The box was successfully sealed")
             assert client._server_config == server_handshake_config(server_features=(ServerFeature.REWARDS,))
 
 
@@ -78,7 +78,7 @@ async def test_client_reward_is_dropped_when_example_server_does_not_advertise_r
         client = RemotePolicyClient(url)
         async with client:
             with caplog.at_level("WARNING", logger="policy_inference_spec.client"):
-                await client.reward(1.5, "ignored")
+                await client.reward([1.5], "ignored")
 
     assert "Dropping reward because server does not advertise rewards support" in caplog.text
 

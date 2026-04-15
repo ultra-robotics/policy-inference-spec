@@ -34,7 +34,7 @@ from policy_inference_spec.protocol import (
     POLICY_ID_KEY,
     PROMPT_KEY,
     REWARD_DESCRIPTION_KEY,
-    REWARD_KEY,
+    REWARDS_H_KEY,
     STATUS_KEY,
     RewardSignal,
     ServerFeature,
@@ -143,7 +143,7 @@ async def handle_inference_connection(
                     {
                         ENDPOINT_KEY: ENDPOINT_REWARD,
                         STATUS_KEY: "ok",
-                        REWARD_KEY: reward_signal.reward,
+                        REWARDS_H_KEY: list(reward_signal.rewards_h),
                         **(
                             {REWARD_DESCRIPTION_KEY: reward_signal.description}
                             if reward_signal.description is not None

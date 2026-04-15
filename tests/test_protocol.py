@@ -21,7 +21,7 @@ from policy_inference_spec.protocol import (
     FloatArray,
     ProtocolPayload,
     REWARD_DESCRIPTION_KEY,
-    REWARD_KEY,
+    REWARDS_H_KEY,
     RewardSignal,
     ServerFeature,
     ServerHandshake,
@@ -141,12 +141,12 @@ def test_server_handshake_round_trip_preserves_server_features() -> None:
 
 
 def test_reward_signal_round_trip_with_optional_description() -> None:
-    reward_signal = RewardSignal(1.5, "The box was successfully sealed")
+    reward_signal = RewardSignal((1.5, 0.0), "The box was successfully sealed")
 
     assert RewardSignal.from_payload(reward_signal.to_payload()) == reward_signal
     assert reward_signal.to_payload() == {
         ENDPOINT_KEY: ENDPOINT_REWARD,
-        REWARD_KEY: 1.5,
+        REWARDS_H_KEY: [1.5, 0.0],
         REWARD_DESCRIPTION_KEY: "The box was successfully sealed",
     }
 
