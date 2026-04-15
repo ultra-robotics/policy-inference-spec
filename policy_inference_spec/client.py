@@ -33,6 +33,7 @@ from policy_inference_spec.protocol import (
     ServerFeature,
     ServerHandshake,
 )
+import asyncio
 
 LOGGER = logging.getLogger(__name__)
 
@@ -73,6 +74,7 @@ class RemotePolicyClient:
     ) -> None:
         self.predict_url = policy_ws_url(predict_url)
         self._policy_auth_headers = policy_auth_headers or {}
+        self._lock = asyncio.Lock()
         self._ws: Any = None
         self._server_config: ServerHandshake | None = None
         self._connected_url: str | None = None
@@ -134,9 +136,10 @@ class RemotePolicyClient:
             return
         if self._ws is not None:
             await self._close_ws()
-        self._ws = await websockets.connect(uri, additional_headers=self._headers())
-        self._connected_url = uri
-        first = await self._ws.recv()
+        async with self._lock:
+            self._ws = await websockets.connect(uri, additional_headers=self._headers())
+            self._connected_url = uri
+            first = await self._ws.recv()
         assert isinstance(first, bytes), type(first)
         server_config_payload = deserialize_from_msgpack(first)
         assert isinstance(server_config_payload, dict), "ServerConfig must be a dict"
@@ -145,9 +148,10 @@ class RemotePolicyClient:
 
     async def _close_ws(self) -> None:
         self._log_latency_summary(force=True)
-        if self._ws is not None:
-            await self._ws.close()
-            self._ws = None
+        async with self._lock:
+            if self._ws is not None:
+                await self._ws.close()
+                self._ws = None
         self._server_config = None
         self._connected_url = None
 
@@ -201,15 +205,15 @@ class RemotePolicyClient:
 
     async def reward(self, rewards_h: list[float] | tuple[float, ...] = (1.0,), description: str | None = None) -> None:
         await self._ensure_ws()
-        assert self._ws is not None
         assert self._server_config is not None
         if not self._server_config.supports(ServerFeature.REWARDS):
             LOGGER.warning("Dropping reward because server does not advertise %s support", ServerFeature.REWARDS)
             return
-
         reward_signal = RewardSignal(rewards_h=tuple(float(reward) for reward in rewards_h), description=description)
-        await self._ws.send(serialize_to_msgpack(reward_signal.to_payload()))
-        response_raw = await self._ws.recv()
+        async with self._lock:
+            assert self._ws is not None
+            await self._ws.send(serialize_to_msgpack(reward_signal.to_payload()))
+            response_raw = await self._ws.recv()
         if isinstance(response_raw, str):
             _emit_server_error_verbatim(response_raw)
             raise AssertionError("unexpected text response from inference server")
@@ -224,14 +228,15 @@ class RemotePolicyClient:
     async def predict(self, wire_frame: dict[str, Any]) -> RemotePolicyPrediction:
         try:
             await self._ensure_ws()
-            assert self._ws is not None
             wire_frame = self._encode_wire_frame_images(wire_frame)
             validate_wire_inference_request_frame(wire_frame)
             self._warn_on_camera_name_mismatch(wire_frame)
             payload = serialize_to_msgpack(wire_frame)
             start_time_ns = time.time_ns()
-            await self._ws.send(payload)
-            response_raw = await self._ws.recv()
+            async with self._lock:
+                assert self._ws is not None
+                await self._ws.send(payload)
+                response_raw = await self._ws.recv()
             end_time_ns = time.time_ns()
         except websockets.ConnectionClosedError as exc:
             await self._raise_if_service_restarted(exc)
