@@ -21,7 +21,13 @@ ENDPOINT_TELEMETRY = "telemetry"
 ENDPOINT_REWARD = "reward"
 MODEL_ID_KEY = "model_id"
 POLICY_ID_KEY = "policy_id"
-REWARD_KEY = "reward"
+DUMB_REWARD_GOAL_ACTION_CHUNK_KEY = "dumb_reward_goal_action_chunk"
+DUMB_REWARD_THRESHOLD_KEY = "dumb_reward_threshold"
+FAST_MOCK_ACTION_DIM_KEY = "fast_mock_action_dim"
+FAST_MOCK_ACTION_HORIZON_KEY = "fast_mock_action_horizon"
+REWARDS_H_KEY = "rewards_h"
+ACTION_PREFIX_KEY = "action_prefix"
+PREFIX_CHANGE_START_KEY = "prefix_change_start"
 REWARD_DESCRIPTION_KEY = "description"
 
 CAMERA_NAMES_KEY = "camera_names"
@@ -35,7 +41,7 @@ ERROR_KEY = "error"
 CONTEXT_EMBEDDING_TOKENS = 2
 CONTEXT_EMBEDDING_WIDTH = 128
 
-InferenceMetadataValue: TypeAlias = str | int | float | bool | list[str] | list[int]
+InferenceMetadataValue: TypeAlias = str | int | float | bool | list[str] | list[int] | list[float]
 ImageArray: TypeAlias = npt.NDArray[np.uint8]
 FloatArray: TypeAlias = npt.NDArray[np.float32]
 ProtocolValue: TypeAlias = ImageArray | FloatArray | bytes | InferenceMetadataValue
@@ -145,18 +151,20 @@ def make_server_handshake(
 
 @dataclass(frozen=True)
 class RewardSignal:
-    reward: float = 1.0
+    rewards_h: tuple[float, ...] = (1.0,)
     description: str | None = None
 
     def __post_init__(self) -> None:
-        assert isinstance(self.reward, (int, float)), f"{REWARD_KEY} must be numeric"
+        assert isinstance(self.rewards_h, tuple), f"{REWARDS_H_KEY} must be tuple[float, ...]"
+        assert self.rewards_h, f"{REWARDS_H_KEY} must not be empty"
+        assert all(isinstance(reward, (int, float)) for reward in self.rewards_h), f"{REWARDS_H_KEY} must be numeric"
         if self.description is not None:
             assert isinstance(self.description, str), f"{REWARD_DESCRIPTION_KEY} must be str"
 
     def to_payload(self) -> ProtocolPayload:
         payload: ProtocolPayload = {
             ENDPOINT_KEY: ENDPOINT_REWARD,
-            REWARD_KEY: float(self.reward),
+            REWARDS_H_KEY: [float(reward) for reward in self.rewards_h],
         }
         if self.description is not None:
             payload[REWARD_DESCRIPTION_KEY] = self.description
@@ -168,11 +176,13 @@ class RewardSignal:
         assert payload.get(ENDPOINT_KEY) == ENDPOINT_REWARD, (
             f"{ENDPOINT_KEY} must be {ENDPOINT_REWARD!r}, got {payload.get(ENDPOINT_KEY)!r}"
         )
-        reward = payload.get(REWARD_KEY, 1.0)
-        assert isinstance(reward, (int, float)), f"{REWARD_KEY} must be numeric"
+        rewards_h_raw = payload.get(REWARDS_H_KEY, [1.0])
+        assert isinstance(rewards_h_raw, list), f"{REWARDS_H_KEY} must be list[float]"
+        assert rewards_h_raw, f"{REWARDS_H_KEY} must not be empty"
+        assert all(isinstance(reward, (int, float)) for reward in rewards_h_raw), f"{REWARDS_H_KEY} must be numeric"
         description = payload.get(REWARD_DESCRIPTION_KEY)
         assert description is None or isinstance(description, str), f"{REWARD_DESCRIPTION_KEY} must be str"
-        return cls(reward=float(reward), description=description)
+        return cls(rewards_h=tuple(float(reward) for reward in rewards_h_raw), description=description)
 
 
 __all__ = [
@@ -183,11 +193,15 @@ __all__ = [
     "CONTEXT_EMBEDDING_TOKENS",
     "CONTEXT_EMBEDDING_WIDTH",
     "DEFAULT_INFERENCE_SERVER_PORT",
+    "DUMB_REWARD_GOAL_ACTION_CHUNK_KEY",
+    "DUMB_REWARD_THRESHOLD_KEY",
     "ENDPOINT_KEY",
     "ENDPOINT_RESET",
     "ENDPOINT_REWARD",
     "ENDPOINT_TELEMETRY",
     "ERROR_KEY",
+    "FAST_MOCK_ACTION_DIM_KEY",
+    "FAST_MOCK_ACTION_HORIZON_KEY",
     "FloatArray",
     "IMAGE_RESOLUTION_KEY",
     "ImageArray",
@@ -202,7 +216,7 @@ __all__ = [
     "ProtocolPayload",
     "ProtocolValue",
     "REWARD_DESCRIPTION_KEY",
-    "REWARD_KEY",
+    "REWARDS_H_KEY",
     "RewardSignal",
     "SERVER_FEATURES_KEY",
     "STATUS_KEY",

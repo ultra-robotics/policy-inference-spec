@@ -27,7 +27,7 @@ from policy_inference_spec.protocol import (
     ENDPOINT_REWARD,
     INFERENCE_TIME_KEY,
     JOINT_STATE_KEY,
-    REWARD_KEY,
+    REWARDS_H_KEY,
     RewardSignal,
     STATUS_KEY,
     ServerFeature,
@@ -203,14 +203,13 @@ class RemotePolicyClient:
         await self._close_ws()
         raise InferenceServiceRestartedError("Inference service restarted during prediction") from exc
 
-    async def reward(self, value: float = 1.0, description: str | None = None) -> None:
+    async def reward(self, rewards_h: list[float] | tuple[float, ...] = (1.0,), description: str | None = None) -> None:
         await self._ensure_ws()
         assert self._server_config is not None
         if not self._server_config.supports(ServerFeature.REWARDS):
             LOGGER.warning("Dropping reward because server does not advertise %s support", ServerFeature.REWARDS)
             return
-
-        reward_signal = RewardSignal(reward=float(value), description=description)
+        reward_signal = RewardSignal(rewards_h=tuple(float(reward) for reward in rewards_h), description=description)
         async with self._lock:
             assert self._ws is not None
             await self._ws.send(serialize_to_msgpack(reward_signal.to_payload()))
@@ -223,8 +222,8 @@ class RemotePolicyClient:
         assert isinstance(response, dict), f"unexpected reward response type {type(response)}"
         assert response.get(STATUS_KEY) == "ok", f"unexpected reward response payload: {response}"
         if response.get(ENDPOINT_KEY) == ENDPOINT_REWARD:
-            reward_ack = response.get(REWARD_KEY)
-            assert reward_ack is None or isinstance(reward_ack, (int, float)), f"{REWARD_KEY} must be numeric"
+            rewards_ack = response.get(REWARDS_H_KEY)
+            assert rewards_ack is None or isinstance(rewards_ack, list), f"{REWARDS_H_KEY} must be list[float]"
 
     async def predict(self, wire_frame: dict[str, Any]) -> RemotePolicyPrediction:
         try:

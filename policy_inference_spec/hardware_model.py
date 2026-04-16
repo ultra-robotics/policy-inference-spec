@@ -13,12 +13,18 @@ from policy_inference_spec.protocol import (
     CONTEXT_EMBEDDINGS_KEY,
     CONTEXT_EMBEDDING_TOKENS,
     CONTEXT_EMBEDDING_WIDTH,
+    DUMB_REWARD_GOAL_ACTION_CHUNK_KEY,
+    DUMB_REWARD_THRESHOLD_KEY,
     ENDPOINT_KEY,
+    FAST_MOCK_ACTION_DIM_KEY,
+    FAST_MOCK_ACTION_HORIZON_KEY,
     INFERENCE_TIME_KEY,
     JOINT_STATE_KEY,
     MODEL_ID_KEY,
     POLICY_ID_KEY,
     PROMPT_KEY,
+    ACTION_PREFIX_KEY,
+    PREFIX_CHANGE_START_KEY,
     ServerFeature,
     ServerHandshake,
     make_server_handshake,
@@ -130,6 +136,19 @@ def _wire_inference_request_keys(*, hardware_model: HardwareModel = DEFAULT_HARD
     )
 
 
+def _optional_wire_inference_request_keys() -> frozenset[str]:
+    return frozenset(
+        {
+            DUMB_REWARD_GOAL_ACTION_CHUNK_KEY,
+            DUMB_REWARD_THRESHOLD_KEY,
+            FAST_MOCK_ACTION_DIM_KEY,
+            FAST_MOCK_ACTION_HORIZON_KEY,
+            ACTION_PREFIX_KEY,   
+            PREFIX_CHANGE_START_KEY
+        }
+    )
+
+
 def server_handshake_for_hardware_model(
     hardware_model: str | HardwareModel = DEFAULT_HARDWARE_MODEL,
     *,
@@ -172,11 +191,44 @@ def validate_wire_inference_request_frame(
     frame: dict[str, Any], hardware_model: HardwareModel = DEFAULT_HARDWARE_MODEL
 ) -> HardwareModel:
     assert ENDPOINT_KEY not in frame, "inference frame must not contain endpoint"
-    allowed = _wire_inference_request_keys(hardware_model=hardware_model)
+    required = _wire_inference_request_keys(hardware_model=hardware_model)
+    allowed = required | _optional_wire_inference_request_keys()
     keys = set(frame.keys())
-    assert keys == allowed, f"wire inference keys {keys} != expected {allowed}"
+    assert required <= keys <= allowed, f"wire inference keys {keys} must include {required} and stay within {allowed}"
     assert isinstance(frame[PROMPT_KEY], str), f"{PROMPT_KEY} must be str"
     assert isinstance(frame[MODEL_ID_KEY], str), f"{MODEL_ID_KEY} must be str"
+    fast_mock_action_dim_raw = frame.get(FAST_MOCK_ACTION_DIM_KEY)
+    fast_mock_action_horizon_raw = frame.get(FAST_MOCK_ACTION_HORIZON_KEY)
+    has_fast_mock_action_dim = fast_mock_action_dim_raw is not None
+    has_fast_mock_action_horizon = fast_mock_action_horizon_raw is not None
+    assert has_fast_mock_action_dim == has_fast_mock_action_horizon, (
+        f"{FAST_MOCK_ACTION_DIM_KEY} and {FAST_MOCK_ACTION_HORIZON_KEY} must be provided together"
+    )
+    expected_action_dim = hardware_model.action_dim
+    if has_fast_mock_action_dim:
+        assert isinstance(fast_mock_action_dim_raw, int), f"{FAST_MOCK_ACTION_DIM_KEY} must be int"
+        assert isinstance(fast_mock_action_horizon_raw, int), f"{FAST_MOCK_ACTION_HORIZON_KEY} must be int"
+        assert fast_mock_action_dim_raw > 0, f"{FAST_MOCK_ACTION_DIM_KEY} must be positive"
+        assert fast_mock_action_horizon_raw > 0, f"{FAST_MOCK_ACTION_HORIZON_KEY} must be positive"
+        expected_action_dim = fast_mock_action_dim_raw
+    has_goal_chunk = DUMB_REWARD_GOAL_ACTION_CHUNK_KEY in frame
+    has_threshold = DUMB_REWARD_THRESHOLD_KEY in frame
+    assert has_goal_chunk == has_threshold, (
+        f"{DUMB_REWARD_GOAL_ACTION_CHUNK_KEY} and {DUMB_REWARD_THRESHOLD_KEY} must be provided together"
+    )
+    if has_goal_chunk:
+        goal_action_chunk = frame[DUMB_REWARD_GOAL_ACTION_CHUNK_KEY]
+        assert isinstance(goal_action_chunk, np.ndarray), f"{DUMB_REWARD_GOAL_ACTION_CHUNK_KEY} must be ndarray"
+        assert goal_action_chunk.ndim == 2, f"{DUMB_REWARD_GOAL_ACTION_CHUNK_KEY} must be 2-D, got {goal_action_chunk.shape}"
+        assert goal_action_chunk.shape[1] == expected_action_dim, (
+            f"{DUMB_REWARD_GOAL_ACTION_CHUNK_KEY} second dim must be {expected_action_dim}, got {goal_action_chunk.shape}"
+        )
+        assert np.issubdtype(goal_action_chunk.dtype, np.floating), (
+            f"{DUMB_REWARD_GOAL_ACTION_CHUNK_KEY} must be floating ndarray, got {goal_action_chunk.dtype}"
+        )
+        threshold = frame[DUMB_REWARD_THRESHOLD_KEY]
+        assert isinstance(threshold, (int, float)), f"{DUMB_REWARD_THRESHOLD_KEY} must be numeric"
+        assert float(threshold) > 0.0, f"{DUMB_REWARD_THRESHOLD_KEY} must be positive"
     _validate_joint_position_array(frame[JOINT_STATE_KEY], hardware_model)
     for k in _observation_keys(hardware_model):
         v = frame[k]
