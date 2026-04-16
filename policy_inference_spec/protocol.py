@@ -26,6 +26,8 @@ DUMB_REWARD_THRESHOLD_KEY = "dumb_reward_threshold"
 FAST_MOCK_ACTION_DIM_KEY = "fast_mock_action_dim"
 FAST_MOCK_ACTION_HORIZON_KEY = "fast_mock_action_horizon"
 REWARDS_H_KEY = "rewards_h"
+ACTION_PREFIX_KEY = "action_prefix"
+PREFIX_CHANGE_START_KEY = "prefix_change_start"
 REWARD_DESCRIPTION_KEY = "description"
 
 CAMERA_NAMES_KEY = "camera_names"
