@@ -194,11 +194,7 @@ def validate_wire_inference_request_frame(
     required = _wire_inference_request_keys(hardware_model=hardware_model)
     allowed = required | _optional_wire_inference_request_keys()
     keys = set(frame.keys())
-<<<<<<< HEAD
     assert required <= keys <= allowed, f"wire inference keys {keys} must include {required} and stay within {allowed}"
-=======
-    assert keys.issubset(allowed), f"wire inference keys {keys} != expected {allowed}"
->>>>>>> a9c51a1 (add action prefix conditioning)
     assert isinstance(frame[PROMPT_KEY], str), f"{PROMPT_KEY} must be str"
     assert isinstance(frame[MODEL_ID_KEY], str), f"{MODEL_ID_KEY} must be str"
     fast_mock_action_dim_raw = frame.get(FAST_MOCK_ACTION_DIM_KEY)
