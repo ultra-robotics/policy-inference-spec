@@ -23,6 +23,7 @@ from policy_inference_spec.hardware_model import (
 from policy_inference_spec.codec import deserialize_from_msgpack, serialize_to_msgpack
 from policy_inference_spec.protocol import (
     ACTION_KEY,
+    CHUNK_ID_KEY,
     CONTEXT_EMBEDDINGS_KEY,
     CONTEXT_EMBEDDING_TOKENS,
     CONTEXT_EMBEDDING_WIDTH,
@@ -109,6 +110,7 @@ async def test_predict_round_trip_with_mock_websocket() -> None:
             CONTEXT_EMBEDDINGS_KEY: context_embeddings,
             INFERENCE_TIME_KEY: 3.5,
             POLICY_ID_KEY: "policy-1",
+            CHUNK_ID_KEY: "chunk-xyz",
         }
     )
     ws_mock = MagicMock()
@@ -126,6 +128,7 @@ async def test_predict_round_trip_with_mock_websocket() -> None:
         await client.aclose()
 
     assert pred.policy_id == "policy-1"
+    assert pred.chunk_id == "chunk-xyz"
     assert pred.actions_d.shape == (4, DEFAULT_HARDWARE_MODEL.action_dim)
     assert pred.actions_d.dtype == np.float32
     assert pred.context_embeddings.shape == (CONTEXT_EMBEDDING_TOKENS, CONTEXT_EMBEDDING_WIDTH)
@@ -133,6 +136,36 @@ async def test_predict_round_trip_with_mock_websocket() -> None:
     assert pred.total_latency_ms >= 0.0
     ws_mock.send.assert_called_once()
     assert ws_mock.recv.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_predict_accepts_response_without_chunk_id() -> None:
+    cfg = serialize_to_msgpack(_server_handshake_payload())
+    actions = np.zeros((4, DEFAULT_HARDWARE_MODEL.action_dim), dtype=np.float32)
+    context_embeddings = np.zeros((CONTEXT_EMBEDDING_TOKENS, CONTEXT_EMBEDDING_WIDTH), dtype=np.float32)
+    resp = serialize_to_msgpack(
+        {
+            ACTION_KEY: actions,
+            CONTEXT_EMBEDDINGS_KEY: context_embeddings,
+            POLICY_ID_KEY: "policy-old",
+        }
+    )
+    ws_mock = MagicMock()
+    ws_mock.recv = AsyncMock(side_effect=[cfg, resp])
+    ws_mock.send = AsyncMock()
+    ws_mock.close = AsyncMock()
+
+    async def fake_connect(*_a: object, **_kw: object) -> MagicMock:
+        return ws_mock
+
+    frame = _valid_wire_frame()
+    with patch("policy_inference_spec.client.websockets.connect", side_effect=fake_connect):
+        client = RemotePolicyClient("ws://127.0.0.1:9/ws")
+        pred = await client.predict(frame)
+        await client.aclose()
+
+    assert pred.chunk_id is None
+    assert pred.policy_id == "policy-old"
 
 
 @pytest.mark.asyncio
@@ -302,14 +335,14 @@ async def test_reward_sends_default_value_when_server_supports_rewards() -> None
 
     with patch("policy_inference_spec.client.websockets.connect", side_effect=fake_connect):
         client = RemotePolicyClient("ws://127.0.0.1:9/ws")
-        await client.reward()
+        await client.reward(chunk_id="chunk-1")
         await client.aclose()
 
     ws_mock.send.assert_called_once()
     await_args = ws_mock.send.await_args
     assert await_args is not None
     sent_payload = deserialize_from_msgpack(await_args.args[0])
-    assert sent_payload == {ENDPOINT_KEY: ENDPOINT_REWARD, REWARDS_H_KEY: [1.0]}
+    assert sent_payload == {ENDPOINT_KEY: ENDPOINT_REWARD, CHUNK_ID_KEY: "chunk-1", REWARDS_H_KEY: [1.0]}
 
 
 @pytest.mark.asyncio
@@ -333,7 +366,7 @@ async def test_reward_includes_description_only_when_provided() -> None:
 
     with patch("policy_inference_spec.client.websockets.connect", side_effect=fake_connect):
         client = RemotePolicyClient("ws://127.0.0.1:9/ws")
-        await client.reward([2.5], "The box was successfully sealed")
+        await client.reward([2.5], "The box was successfully sealed", chunk_id="chunk-2")
         await client.aclose()
 
     await_args = ws_mock.send.await_args
@@ -341,6 +374,7 @@ async def test_reward_includes_description_only_when_provided() -> None:
     sent_payload = deserialize_from_msgpack(await_args.args[0])
     assert sent_payload == {
         ENDPOINT_KEY: ENDPOINT_REWARD,
+        CHUNK_ID_KEY: "chunk-2",
         REWARDS_H_KEY: [2.5],
         REWARD_DESCRIPTION_KEY: "The box was successfully sealed",
     }
@@ -360,7 +394,7 @@ async def test_reward_drops_and_warns_when_server_lacks_reward_support(caplog: p
     with patch("policy_inference_spec.client.websockets.connect", side_effect=fake_connect):
         client = RemotePolicyClient("ws://127.0.0.1:9/ws")
         with caplog.at_level("WARNING", logger="policy_inference_spec.client"):
-            await client.reward([3.0], "ignored")
+            await client.reward([3.0], "ignored", chunk_id="chunk-3")
         await client.aclose()
 
     ws_mock.send.assert_not_called()

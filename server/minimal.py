@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import uuid
 from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator, Iterable, Sequence
 
@@ -20,6 +21,7 @@ from policy_inference_spec.hardware_model import (
 )
 from policy_inference_spec.protocol import (
     ACTION_KEY,
+    CHUNK_ID_KEY,
     CONTEXT_EMBEDDINGS_KEY,
     CONTEXT_EMBEDDING_TOKENS,
     CONTEXT_EMBEDDING_WIDTH,
@@ -107,6 +109,7 @@ def _inference_response(
     context_embeddings[-1, -1] = 1.0
     resp = {
         ACTION_KEY: actions,
+        CHUNK_ID_KEY: uuid.uuid4().hex[:12],
         CONTEXT_EMBEDDINGS_KEY: context_embeddings,
         INFERENCE_TIME_KEY: 0.25,
         POLICY_ID_KEY: EXAMPLE_POLICY_ID,

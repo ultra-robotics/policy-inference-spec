@@ -58,6 +58,7 @@ async def test_client_predict_against_example_server() -> None:
     assert np.array_equal(pred.context_embeddings[-1], np.eye(CONTEXT_EMBEDDING_WIDTH, dtype=np.float32)[-1])
     assert np.allclose(pred.actions_d, expected)
     assert pred.policy_id == EXAMPLE_POLICY_ID
+    assert isinstance(pred.chunk_id, str) and pred.chunk_id
 
     for i in range(pred.actions_d.shape[0] - 1):
         assert np.allclose(pred.actions_d[i + 1, :], pred.actions_d[i, :]), "linear demo policy repeats each action row"
@@ -67,7 +68,7 @@ async def test_client_reward_round_trip_against_example_server() -> None:
     async with run_example_server() as url:
         client = RemotePolicyClient(url)
         async with client:
-            await client.reward([1.5], "The box was successfully sealed")
+            await client.reward([1.5], "The box was successfully sealed", chunk_id="chunk-int")
             assert client._server_config == server_handshake_config(server_features=(ServerFeature.REWARDS,))
 
 
@@ -78,7 +79,7 @@ async def test_client_reward_is_dropped_when_example_server_does_not_advertise_r
         client = RemotePolicyClient(url)
         async with client:
             with caplog.at_level("WARNING", logger="policy_inference_spec.client"):
-                await client.reward([1.5], "ignored")
+                await client.reward([1.5], "ignored", chunk_id="chunk-drop")
 
     assert "Dropping reward because server does not advertise rewards support" in caplog.text
 
