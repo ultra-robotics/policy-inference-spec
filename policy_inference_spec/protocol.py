@@ -29,6 +29,7 @@ REWARDS_H_KEY = "rewards_h"
 ACTION_PREFIX_KEY = "action_prefix"
 PREFIX_CHANGE_START_KEY = "prefix_change_start"
 REWARD_DESCRIPTION_KEY = "description"
+DONE_KEY = "done"
 
 CAMERA_NAMES_KEY = "camera_names"
 IMAGE_RESOLUTION_KEY = "image_resolution"
@@ -193,6 +194,7 @@ __all__ = [
     "CONTEXT_EMBEDDING_TOKENS",
     "CONTEXT_EMBEDDING_WIDTH",
     "DEFAULT_INFERENCE_SERVER_PORT",
+    "DONE_KEY",
     "DUMB_REWARD_GOAL_ACTION_CHUNK_KEY",
     "DUMB_REWARD_THRESHOLD_KEY",
     "ENDPOINT_KEY",
