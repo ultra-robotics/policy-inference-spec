@@ -29,6 +29,7 @@ REWARDS_H_KEY = "rewards_h"
 ACTION_PREFIX_KEY = "action_prefix"
 PREFIX_CHANGE_START_KEY = "prefix_change_start"
 REWARD_DESCRIPTION_KEY = "description"
+CHUNK_ID_KEY = "chunk_id"
 DONE_KEY = "done"
 
 CAMERA_NAMES_KEY = "camera_names"
@@ -152,10 +153,12 @@ def make_server_handshake(
 
 @dataclass(frozen=True)
 class RewardSignal:
+    chunk_id: str
     rewards_h: tuple[float, ...] = (1.0,)
     description: str | None = None
 
     def __post_init__(self) -> None:
+        assert isinstance(self.chunk_id, str) and self.chunk_id, f"{CHUNK_ID_KEY} must be a non-empty str"
         assert isinstance(self.rewards_h, tuple), f"{REWARDS_H_KEY} must be tuple[float, ...]"
         assert self.rewards_h, f"{REWARDS_H_KEY} must not be empty"
         assert all(isinstance(reward, (int, float)) for reward in self.rewards_h), f"{REWARDS_H_KEY} must be numeric"
@@ -165,6 +168,7 @@ class RewardSignal:
     def to_payload(self) -> ProtocolPayload:
         payload: ProtocolPayload = {
             ENDPOINT_KEY: ENDPOINT_REWARD,
+            CHUNK_ID_KEY: self.chunk_id,
             REWARDS_H_KEY: [float(reward) for reward in self.rewards_h],
         }
         if self.description is not None:
@@ -177,19 +181,26 @@ class RewardSignal:
         assert payload.get(ENDPOINT_KEY) == ENDPOINT_REWARD, (
             f"{ENDPOINT_KEY} must be {ENDPOINT_REWARD!r}, got {payload.get(ENDPOINT_KEY)!r}"
         )
+        chunk_id = payload.get(CHUNK_ID_KEY)
+        assert isinstance(chunk_id, str) and chunk_id, f"{CHUNK_ID_KEY} must be a non-empty str"
         rewards_h_raw = payload.get(REWARDS_H_KEY, [1.0])
         assert isinstance(rewards_h_raw, list), f"{REWARDS_H_KEY} must be list[float]"
         assert rewards_h_raw, f"{REWARDS_H_KEY} must not be empty"
         assert all(isinstance(reward, (int, float)) for reward in rewards_h_raw), f"{REWARDS_H_KEY} must be numeric"
         description = payload.get(REWARD_DESCRIPTION_KEY)
         assert description is None or isinstance(description, str), f"{REWARD_DESCRIPTION_KEY} must be str"
-        return cls(rewards_h=tuple(float(reward) for reward in rewards_h_raw), description=description)
+        return cls(
+            chunk_id=chunk_id,
+            rewards_h=tuple(float(reward) for reward in rewards_h_raw),
+            description=description,
+        )
 
 
 __all__ = [
     "ACTION_KEY",
     "ACTION_SPACE_KEY",
     "CAMERA_NAMES_KEY",
+    "CHUNK_ID_KEY",
     "CONTEXT_EMBEDDINGS_KEY",
     "CONTEXT_EMBEDDING_TOKENS",
     "CONTEXT_EMBEDDING_WIDTH",

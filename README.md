@@ -229,6 +229,7 @@ Optional response fields:
 
 - `inference_time`: numeric
 - `policy_id`: `str`
+- `chunk_id`: non-empty `str`. When the server sets it, clients must echo it on the matching reward frame. Older servers that do not emit `chunk_id` are still accepted.
 
 `RemotePolicyClient.predict()` returns `RemotePolicyPrediction`:
 
@@ -236,14 +237,16 @@ Optional response fields:
 - `context_embeddings`
 - `total_latency_ms`
 - `policy_id`
+- `chunk_id` (`str | None`; `None` when the server omitted it)
 
 ### Reward and control messages
 
 - `RemotePolicyClient.reward()` only sends a reward frame if the server handshake advertises `"rewards"`.
 - If reward support is not advertised, the client logs a warning and drops the message.
-- `RewardSignal.to_payload()` produces:
-  - `{"endpoint": "reward", "reward": <float>}`
+- `RewardSignal` requires a `chunk_id` identifying which inference response the reward applies to. `RewardSignal.to_payload()` produces:
+  - `{"endpoint": "reward", "chunk_id": <str>, "rewards_h": [<float>, ...]}`
   - optionally with `{"description": <str>}`
+- `RemotePolicyClient.reward(..., chunk_id=...)` takes the `chunk_id` as a required keyword argument — callers must thread it through from the matching `RemotePolicyPrediction.chunk_id`.
 - The example server acknowledges rewards with `{"endpoint": "reward", "status": "ok", ...}`.
 - `ENDPOINT_RESET` and `ENDPOINT_TELEMETRY` constants exist, and `server.minimal` replies to both with `{"status": "ok"}`.
 - There are no dedicated reset or telemetry client helpers in this package.

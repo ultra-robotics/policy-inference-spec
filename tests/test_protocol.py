@@ -11,6 +11,7 @@ from beartype.roar import BeartypeCallHintParamViolation
 from policy_inference_spec.codec import NdarrayField, deserialize_from_msgpack, encode_image, serialize_to_msgpack
 from policy_inference_spec.protocol import (
     ACTION_KEY,
+    CHUNK_ID_KEY,
     CONTEXT_EMBEDDINGS_KEY,
     CONTEXT_EMBEDDING_TOKENS,
     CONTEXT_EMBEDDING_WIDTH,
@@ -113,6 +114,33 @@ def test_validate_wire_inference_response_accepts_context_embeddings() -> None:
     )
 
 
+def test_validate_wire_inference_response_accepts_optional_chunk_id() -> None:
+    validate_wire_inference_response(
+        {
+            ACTION_KEY: np.zeros((2, 25), dtype=np.float32),
+            CONTEXT_EMBEDDINGS_KEY: np.zeros(
+                (CONTEXT_EMBEDDING_TOKENS, CONTEXT_EMBEDDING_WIDTH),
+                dtype=np.float32,
+            ),
+            CHUNK_ID_KEY: "abc123",
+        }
+    )
+
+
+def test_validate_wire_inference_response_rejects_empty_chunk_id() -> None:
+    with pytest.raises(AssertionError, match=CHUNK_ID_KEY):
+        validate_wire_inference_response(
+            {
+                ACTION_KEY: np.zeros((2, 25), dtype=np.float32),
+                CONTEXT_EMBEDDINGS_KEY: np.zeros(
+                    (CONTEXT_EMBEDDING_TOKENS, CONTEXT_EMBEDDING_WIDTH),
+                    dtype=np.float32,
+                ),
+                CHUNK_ID_KEY: "",
+            }
+        )
+
+
 def test_encode_image_preserves_original_shape_metadata() -> None:
     expected = np.zeros((1, 12, 16, 3), dtype=np.uint8)
 
@@ -141,14 +169,34 @@ def test_server_handshake_round_trip_preserves_server_features() -> None:
 
 
 def test_reward_signal_round_trip_with_optional_description() -> None:
-    reward_signal = RewardSignal((1.5, 0.0), "The box was successfully sealed")
+    reward_signal = RewardSignal(
+        chunk_id="chunk-abc",
+        rewards_h=(1.5, 0.0),
+        description="The box was successfully sealed",
+    )
 
     assert RewardSignal.from_payload(reward_signal.to_payload()) == reward_signal
     assert reward_signal.to_payload() == {
         ENDPOINT_KEY: ENDPOINT_REWARD,
+        CHUNK_ID_KEY: "chunk-abc",
         REWARDS_H_KEY: [1.5, 0.0],
         REWARD_DESCRIPTION_KEY: "The box was successfully sealed",
     }
+
+
+def test_reward_signal_rejects_empty_chunk_id() -> None:
+    with pytest.raises(AssertionError, match=CHUNK_ID_KEY):
+        RewardSignal(chunk_id="", rewards_h=(1.0,))
+
+
+def test_reward_signal_from_payload_requires_chunk_id() -> None:
+    with pytest.raises(AssertionError, match=CHUNK_ID_KEY):
+        RewardSignal.from_payload(
+            {
+                ENDPOINT_KEY: ENDPOINT_REWARD,
+                REWARDS_H_KEY: [1.0],
+            }
+        )
 
 
 def test_serialize_to_msgpack_accepts_optional_dumb_reward_goal_chunk_and_threshold() -> None:

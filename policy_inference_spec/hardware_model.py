@@ -10,6 +10,7 @@ import numpy.typing as npt
 
 from policy_inference_spec.protocol import (
     ACTION_KEY,
+    CHUNK_ID_KEY,
     CONTEXT_EMBEDDINGS_KEY,
     CONTEXT_EMBEDDING_TOKENS,
     CONTEXT_EMBEDDING_WIDTH,
@@ -242,7 +243,7 @@ def validate_wire_inference_response(
 ) -> None:
     response_summary = _summarize_response_payload(result)
     assert "error" not in result, f"unexpected error payload: {response_summary}"
-    allowed = frozenset({ACTION_KEY, CONTEXT_EMBEDDINGS_KEY, INFERENCE_TIME_KEY, POLICY_ID_KEY})
+    allowed = frozenset({ACTION_KEY, CHUNK_ID_KEY, CONTEXT_EMBEDDINGS_KEY, INFERENCE_TIME_KEY, POLICY_ID_KEY})
     assert set(result.keys()) <= allowed, (
         f"response keys {set(result.keys())} not subset of {allowed}; summary={response_summary}"
     )
@@ -270,6 +271,9 @@ def validate_wire_inference_response(
         assert isinstance(result[INFERENCE_TIME_KEY], (int, float)), "inference_time must be numeric"
     if POLICY_ID_KEY in result:
         assert isinstance(result[POLICY_ID_KEY], str), f"{POLICY_ID_KEY} must be str"
+    if CHUNK_ID_KEY in result:
+        chunk_id = result[CHUNK_ID_KEY]
+        assert isinstance(chunk_id, str) and chunk_id, f"{CHUNK_ID_KEY} must be a non-empty str"
 
 
 __all__ = [

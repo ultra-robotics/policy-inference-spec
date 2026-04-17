@@ -22,6 +22,7 @@ from policy_inference_spec.codec import deserialize_from_msgpack, encode_image, 
 from policy_inference_spec.hardware_model import validate_wire_inference_request_frame, validate_wire_inference_response
 from policy_inference_spec.protocol import (
     ACTION_KEY,
+    CHUNK_ID_KEY,
     CONTEXT_EMBEDDINGS_KEY,
     ENDPOINT_KEY,
     ENDPOINT_REWARD,
@@ -57,6 +58,7 @@ class RemotePolicyPrediction:
     context_embeddings: npt.NDArray[np.float32]
     total_latency_ms: float
     policy_id: str
+    chunk_id: str | None
 
 
 class InferenceServiceRestartedError(RuntimeError):
@@ -203,13 +205,23 @@ class RemotePolicyClient:
         await self._close_ws()
         raise InferenceServiceRestartedError("Inference service restarted during prediction") from exc
 
-    async def reward(self, rewards_h: list[float] | tuple[float, ...] = (1.0,), description: str | None = None) -> None:
+    async def reward(
+        self,
+        rewards_h: list[float] | tuple[float, ...] = (1.0,),
+        description: str | None = None,
+        *,
+        chunk_id: str,
+    ) -> None:
         await self._ensure_ws()
         assert self._server_config is not None
         if not self._server_config.supports(ServerFeature.REWARDS):
             LOGGER.warning("Dropping reward because server does not advertise %s support", ServerFeature.REWARDS)
             return
-        reward_signal = RewardSignal(rewards_h=tuple(float(reward) for reward in rewards_h), description=description)
+        reward_signal = RewardSignal(
+            chunk_id=chunk_id,
+            rewards_h=tuple(float(reward) for reward in rewards_h),
+            description=description,
+        )
         async with self._lock:
             assert self._ws is not None
             await self._ws.send(serialize_to_msgpack(reward_signal.to_payload()))
@@ -260,6 +272,11 @@ class RemotePolicyClient:
             assert isinstance(infer_raw, (int, float)), f"{INFERENCE_TIME_KEY} must be numeric"
             server_latency_ms = float(infer_raw)
         policy_id_used = str(result.get("policy_id", ""))
+        chunk_id_raw = result.get(CHUNK_ID_KEY)
+        chunk_id_used: str | None = None
+        if chunk_id_raw is not None:
+            assert isinstance(chunk_id_raw, str) and chunk_id_raw, f"{CHUNK_ID_KEY} must be a non-empty str"
+            chunk_id_used = chunk_id_raw
         self._record_latency(total_latency_ms=total_latency_ms, server_latency_ms=server_latency_ms)
 
         actions_d = np.array(actions, dtype=np.float32)
@@ -269,6 +286,7 @@ class RemotePolicyClient:
             context_embeddings=context_embeddings,
             total_latency_ms=total_latency_ms,
             policy_id=policy_id_used,
+            chunk_id=chunk_id_used,
         )
 
 

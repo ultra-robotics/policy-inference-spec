@@ -14,6 +14,7 @@ from policy_inference_spec.client import (
 from policy_inference_spec.codec import NdarrayField, deserialize_from_msgpack, encode_image, serialize_to_msgpack
 from policy_inference_spec.protocol import (
     ACTION_KEY,
+    CHUNK_ID_KEY,
     DEFAULT_INFERENCE_SERVER_PORT,
     DUMB_REWARD_GOAL_ACTION_CHUNK_KEY,
     DUMB_REWARD_THRESHOLD_KEY,
@@ -48,6 +49,7 @@ from policy_inference_spec.hardware_model import (
 
 __all__ = [
     "ACTION_KEY",
+    "CHUNK_ID_KEY",
     "DEFAULT_INFERENCE_SERVER_PORT",
     "DEFAULT_PREDICT_URL",
     "DEFAULT_HARDWARE_MODEL",
