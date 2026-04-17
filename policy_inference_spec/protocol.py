@@ -29,6 +29,7 @@ REWARDS_H_KEY = "rewards_h"
 ACTION_PREFIX_KEY = "action_prefix"
 PREFIX_CHANGE_START_KEY = "prefix_change_start"
 REWARD_DESCRIPTION_KEY = "description"
+DONE_KEY = "done"
 
 CAMERA_NAMES_KEY = "camera_names"
 IMAGE_RESOLUTION_KEY = "image_resolution"
