@@ -11,6 +11,8 @@ import numpy.typing as npt
 DEFAULT_INFERENCE_SERVER_PORT = 18090
 
 JOINT_STATE_KEY = "observation/state"
+OBSERVATION_HIDDEN_KEY = "observation/hidden"
+OBSERVATION_ENV_KEY = "observation/env"
 PROMPT_KEY = "prompt"
 ACTION_KEY = "action"
 CONTEXT_EMBEDDINGS_KEY = "context_embeddings"
@@ -220,6 +222,8 @@ __all__ = [
     "INFERENCE_TIME_KEY",
     "InferenceMetadataValue",
     "JOINT_STATE_KEY",
+    "OBSERVATION_ENV_KEY",
+    "OBSERVATION_HIDDEN_KEY",
     "MODEL_ID_KEY",
     "N_EXTERNAL_CAMERAS_KEY",
     "NEEDS_WRIST_CAMERA_KEY",
