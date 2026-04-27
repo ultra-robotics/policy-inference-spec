@@ -25,6 +25,8 @@ DUMB_REWARD_GOAL_ACTION_CHUNK_KEY = "dumb_reward_goal_action_chunk"
 DUMB_REWARD_THRESHOLD_KEY = "dumb_reward_threshold"
 FAST_MOCK_ACTION_DIM_KEY = "fast_mock_action_dim"
 FAST_MOCK_ACTION_HORIZON_KEY = "fast_mock_action_horizon"
+ACTION_PREFIX_KEY = "action_prefix"
+PREFIX_CHANGE_START_KEY = "prefix_change_start"
 REWARDS_H_KEY = "rewards_h"
 REWARD_DESCRIPTION_KEY = "description"
 
@@ -185,6 +187,7 @@ class RewardSignal:
 
 __all__ = [
     "ACTION_KEY",
+    "ACTION_PREFIX_KEY",
     "ACTION_SPACE_KEY",
     "CAMERA_NAMES_KEY",
     "CONTEXT_EMBEDDINGS_KEY",
@@ -210,6 +213,7 @@ __all__ = [
     "N_EXTERNAL_CAMERAS_KEY",
     "NEEDS_WRIST_CAMERA_KEY",
     "POLICY_ID_KEY",
+    "PREFIX_CHANGE_START_KEY",
     "PROMPT_KEY",
     "ProtocolPayload",
     "ProtocolValue",

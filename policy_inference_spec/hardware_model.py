@@ -10,6 +10,7 @@ import numpy.typing as npt
 
 from policy_inference_spec.protocol import (
     ACTION_KEY,
+    ACTION_PREFIX_KEY,
     CONTEXT_EMBEDDINGS_KEY,
     CONTEXT_EMBEDDING_TOKENS,
     CONTEXT_EMBEDDING_WIDTH,
@@ -22,6 +23,7 @@ from policy_inference_spec.protocol import (
     JOINT_STATE_KEY,
     MODEL_ID_KEY,
     POLICY_ID_KEY,
+    PREFIX_CHANGE_START_KEY,
     PROMPT_KEY,
     ServerFeature,
     ServerHandshake,
@@ -141,6 +143,8 @@ def _optional_wire_inference_request_keys() -> frozenset[str]:
             DUMB_REWARD_THRESHOLD_KEY,
             FAST_MOCK_ACTION_DIM_KEY,
             FAST_MOCK_ACTION_HORIZON_KEY,
+            ACTION_PREFIX_KEY,
+            PREFIX_CHANGE_START_KEY,
         }
     )
 
@@ -225,6 +229,24 @@ def validate_wire_inference_request_frame(
         threshold = frame[DUMB_REWARD_THRESHOLD_KEY]
         assert isinstance(threshold, (int, float)), f"{DUMB_REWARD_THRESHOLD_KEY} must be numeric"
         assert float(threshold) > 0.0, f"{DUMB_REWARD_THRESHOLD_KEY} must be positive"
+    has_action_prefix = ACTION_PREFIX_KEY in frame
+    has_prefix_change_start = PREFIX_CHANGE_START_KEY in frame
+    assert has_action_prefix == has_prefix_change_start, (
+        f"{ACTION_PREFIX_KEY} and {PREFIX_CHANGE_START_KEY} must be provided together"
+    )
+    if has_action_prefix:
+        action_prefix = frame[ACTION_PREFIX_KEY]
+        assert isinstance(action_prefix, np.ndarray), f"{ACTION_PREFIX_KEY} must be ndarray"
+        assert action_prefix.ndim == 2, f"{ACTION_PREFIX_KEY} must be 2-D, got {action_prefix.shape}"
+        assert action_prefix.shape == (50, expected_action_dim), (
+            f"{ACTION_PREFIX_KEY} must have shape {(50, expected_action_dim)}, got {action_prefix.shape}"
+        )
+        assert np.issubdtype(action_prefix.dtype, np.floating), (
+            f"{ACTION_PREFIX_KEY} must be floating ndarray, got {action_prefix.dtype}"
+        )
+        prefix_change_start = frame[PREFIX_CHANGE_START_KEY]
+        assert isinstance(prefix_change_start, int), f"{PREFIX_CHANGE_START_KEY} must be int"
+        assert 0 < prefix_change_start < 50, f"{PREFIX_CHANGE_START_KEY} must be in [1, 49], got {prefix_change_start}"
     _validate_joint_position_array(frame[JOINT_STATE_KEY], hardware_model)
     for k in _observation_keys(hardware_model):
         v = frame[k]

@@ -9,9 +9,8 @@ import pytest
 import policy_inference_spec.replay_rrd as replay_rrd
 from policy_inference_spec.client import RemotePolicyPrediction
 
-pytestmark = pytest.mark.asyncio
 
-
+@pytest.mark.asyncio
 async def test_replay_recording_orchestrates_predictions_and_logging(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -41,9 +40,18 @@ async def test_replay_recording_orchestrates_predictions_and_logging(
         def __iter__(self):
             return iter(samples)
 
-    async def fake_predict_sample(feature_bundle: object, sample: object, predict_url: str, policy_id: str) -> RemotePolicyPrediction:
+    async def fake_predict_sample(
+        feature_bundle: object,
+        sample: object,
+        predict_url: str,
+        policy_id: str,
+        prompt: str,
+        prefix_change_start: int,
+    ) -> RemotePolicyPrediction:
         assert predict_url == "ws://127.0.0.1:18090/ws"
         assert policy_id == "policy-id"
+        assert prompt == replay_rrd.DEFAULT_PROMPT
+        assert prefix_change_start == 6
         assert sample in samples
         action_dim = getattr(feature_bundle, "action_dim")
         return RemotePolicyPrediction(
@@ -75,6 +83,7 @@ async def test_replay_recording_orchestrates_predictions_and_logging(
         output_path=output_path,
         predict_url="ws://127.0.0.1:18090/ws",
         policy_id="policy-id",
+        prefix_change_start=6,
         max_samples=10,
     )
 
@@ -96,6 +105,7 @@ async def test_replay_recording_orchestrates_predictions_and_logging(
     }
 
 
+@pytest.mark.asyncio
 async def test_replay_recording_requires_samples(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     recording_path = tmp_path / "input.rrd"
     recording_path.write_bytes(b"rrd")
@@ -111,3 +121,16 @@ async def test_replay_recording_requires_samples(monkeypatch: pytest.MonkeyPatch
 
     with pytest.raises(AssertionError, match="No replay samples were produced"):
         await replay_rrd.replay_recording(recording_path=recording_path, output_path=tmp_path / "output.rrd")
+
+
+def test_build_action_prefix_returns_none_when_disabled() -> None:
+    action_hd = np.zeros((50, 25), dtype=np.float32)
+    assert replay_rrd.build_action_prefix(action_hd, 0) is None
+
+
+def test_build_action_prefix_matches_pi_prefix_layout() -> None:
+    action_hd = np.arange(50 * 25, dtype=np.float32).reshape(50, 25)
+    action_prefix = replay_rrd.build_action_prefix(action_hd, 7)
+    assert action_prefix is not None
+    np.testing.assert_allclose(action_prefix[:43], action_hd[:43])
+    np.testing.assert_allclose(action_prefix[43:], np.ones((7, 25), dtype=np.float32))

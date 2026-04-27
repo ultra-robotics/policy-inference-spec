@@ -22,11 +22,13 @@ from policy_inference_spec.codec import deserialize_from_msgpack, encode_image, 
 from policy_inference_spec.hardware_model import validate_wire_inference_request_frame, validate_wire_inference_response
 from policy_inference_spec.protocol import (
     ACTION_KEY,
+    ACTION_PREFIX_KEY,
     CONTEXT_EMBEDDINGS_KEY,
     ENDPOINT_KEY,
     ENDPOINT_REWARD,
     INFERENCE_TIME_KEY,
     JOINT_STATE_KEY,
+    PREFIX_CHANGE_START_KEY,
     REWARDS_H_KEY,
     RewardSignal,
     STATUS_KEY,
@@ -130,6 +132,24 @@ class RemotePolicyClient:
             adapted[key] = field.data
         return adapted
 
+    def _with_action_prefix(
+        self,
+        wire_frame: dict[str, Any],
+        *,
+        action_prefix: npt.NDArray[np.float32] | None,
+        prefix_change_start: int | None,
+    ) -> dict[str, Any]:
+        if action_prefix is None and prefix_change_start is None:
+            return wire_frame
+        assert action_prefix is not None, f"{ACTION_PREFIX_KEY} is required when {PREFIX_CHANGE_START_KEY} is provided"
+        assert prefix_change_start is not None, (
+            f"{PREFIX_CHANGE_START_KEY} is required when {ACTION_PREFIX_KEY} is provided"
+        )
+        adapted = dict(wire_frame)
+        adapted[ACTION_PREFIX_KEY] = np.asarray(action_prefix, dtype=np.float32)
+        adapted[PREFIX_CHANGE_START_KEY] = int(prefix_change_start)
+        return adapted
+
     async def _ensure_ws(self) -> None:
         uri = self.predict_url
         if self._ws is not None and self._connected_url == uri:
@@ -225,9 +245,20 @@ class RemotePolicyClient:
             rewards_ack = response.get(REWARDS_H_KEY)
             assert rewards_ack is None or isinstance(rewards_ack, list), f"{REWARDS_H_KEY} must be list[float]"
 
-    async def predict(self, wire_frame: dict[str, Any]) -> RemotePolicyPrediction:
+    async def predict(
+        self,
+        wire_frame: dict[str, Any],
+        *,
+        action_prefix: npt.NDArray[np.float32] | None = None,
+        prefix_change_start: int | None = None,
+    ) -> RemotePolicyPrediction:
         try:
             await self._ensure_ws()
+            wire_frame = self._with_action_prefix(
+                wire_frame,
+                action_prefix=action_prefix,
+                prefix_change_start=prefix_change_start,
+            )
             wire_frame = self._encode_wire_frame_images(wire_frame)
             validate_wire_inference_request_frame(wire_frame)
             self._warn_on_camera_name_mismatch(wire_frame)
