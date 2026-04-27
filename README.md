@@ -65,6 +65,7 @@ uv run python -m policy_inference_spec.smoke --url ws://127.0.0.1:18090/ws --pre
   - `--prediction-hz`
   - `--max-samples`
   - `--action-prefix-steps`
+  - `--prefix-change-start`
 
 Examples:
 
@@ -214,7 +215,7 @@ Current validation rules:
 Optional request fields:
 
 - `action_prefix`: floating 2-D `numpy.ndarray` shaped `(prefix_steps, 25)`. It carries only real prefix actions; clients must not pad it to the full policy horizon.
-- `prefix_change_start`: non-negative `int`. Required when `action_prefix` is present.
+- `prefix_change_start`: non-negative `int`. Required when `action_prefix` is present. In replay tooling this defaults to `--action-prefix-steps` unless `--prefix-change-start` is set.
 - `dumb_reward_goal_action_chunk` plus `dumb_reward_threshold`: optional debugging/reward fields.
 - `fast_mock_action_dim` plus `fast_mock_action_horizon`: optional testing fields.
 
