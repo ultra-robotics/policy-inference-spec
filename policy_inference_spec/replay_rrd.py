@@ -186,8 +186,7 @@ def _action_prefix_payload(processed_sample: dict[str, np.ndarray], action_prefi
     assert action_prefix_steps <= actions.shape[0], (
         f"action_prefix_steps must be <= action horizon {actions.shape[0]}, got {action_prefix_steps}"
     )
-    action_prefix = np.ones_like(actions, dtype=np.float32)
-    action_prefix[:action_prefix_steps] = actions[:action_prefix_steps]
+    action_prefix = actions[:action_prefix_steps].astype(np.float32, copy=False)
     return {
         ACTION_PREFIX_KEY: action_prefix,
         PREFIX_CHANGE_START_KEY: action_prefix_steps,

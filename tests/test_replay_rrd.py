@@ -127,7 +127,7 @@ async def test_replay_recording_requires_samples(monkeypatch: pytest.MonkeyPatch
         await replay_rrd.replay_recording(recording_path=recording_path, output_path=tmp_path / "output.rrd")
 
 
-async def test_predict_sample_adds_padded_action_prefix(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_predict_sample_adds_unpadded_action_prefix(monkeypatch: pytest.MonkeyPatch) -> None:
     feature_bundle = FeatureBundle(
         name="test",
         observations=[
@@ -199,7 +199,7 @@ async def test_predict_sample_adds_padded_action_prefix(monkeypatch: pytest.Monk
     assert isinstance(request, dict)
     prefix = cast(np.ndarray, request[ACTION_PREFIX_KEY])
     assert isinstance(prefix, np.ndarray)
-    assert prefix.shape == (8, feature_bundle.action_dim)
+    assert prefix.shape == (3, feature_bundle.action_dim)
     assert request[PREFIX_CHANGE_START_KEY] == 3
     arrays: dict[str, np.ndarray] = {}
     for key, value in sample.items():
@@ -208,5 +208,4 @@ async def test_predict_sample_adds_padded_action_prefix(monkeypatch: pytest.Monk
         assert isinstance(value, np.ndarray)
         arrays[key] = value
     expected_actions = feature_bundle.preprocess(arrays)["action"]
-    np.testing.assert_array_equal(prefix[:3], expected_actions[:3])
-    np.testing.assert_array_equal(prefix[3:], np.ones((5, feature_bundle.action_dim), dtype=np.float32))
+    np.testing.assert_array_equal(prefix, expected_actions[:3])

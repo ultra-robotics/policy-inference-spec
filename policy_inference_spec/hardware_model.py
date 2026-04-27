@@ -144,8 +144,8 @@ def _optional_wire_inference_request_keys() -> frozenset[str]:
             DUMB_REWARD_THRESHOLD_KEY,
             FAST_MOCK_ACTION_DIM_KEY,
             FAST_MOCK_ACTION_HORIZON_KEY,
-            ACTION_PREFIX_KEY,   
-            PREFIX_CHANGE_START_KEY
+            ACTION_PREFIX_KEY,
+            PREFIX_CHANGE_START_KEY,
         }
     )
 
@@ -212,6 +212,24 @@ def validate_wire_inference_request_frame(
         assert fast_mock_action_dim_raw > 0, f"{FAST_MOCK_ACTION_DIM_KEY} must be positive"
         assert fast_mock_action_horizon_raw > 0, f"{FAST_MOCK_ACTION_HORIZON_KEY} must be positive"
         expected_action_dim = fast_mock_action_dim_raw
+    has_action_prefix = ACTION_PREFIX_KEY in frame
+    has_prefix_change_start = PREFIX_CHANGE_START_KEY in frame
+    assert has_action_prefix == has_prefix_change_start, (
+        f"{ACTION_PREFIX_KEY} and {PREFIX_CHANGE_START_KEY} must be provided together"
+    )
+    if has_action_prefix:
+        action_prefix = frame[ACTION_PREFIX_KEY]
+        assert isinstance(action_prefix, np.ndarray), f"{ACTION_PREFIX_KEY} must be ndarray"
+        assert action_prefix.ndim == 2, f"{ACTION_PREFIX_KEY} must be 2-D, got {action_prefix.shape}"
+        assert action_prefix.shape[1] == expected_action_dim, (
+            f"{ACTION_PREFIX_KEY} second dim must be {expected_action_dim}, got {action_prefix.shape}"
+        )
+        assert np.issubdtype(action_prefix.dtype, np.floating), (
+            f"{ACTION_PREFIX_KEY} must be floating ndarray, got {action_prefix.dtype}"
+        )
+        prefix_change_start = frame[PREFIX_CHANGE_START_KEY]
+        assert isinstance(prefix_change_start, int), f"{PREFIX_CHANGE_START_KEY} must be int"
+        assert prefix_change_start >= 0, f"{PREFIX_CHANGE_START_KEY} must be non-negative"
     has_goal_chunk = DUMB_REWARD_GOAL_ACTION_CHUNK_KEY in frame
     has_threshold = DUMB_REWARD_THRESHOLD_KEY in frame
     assert has_goal_chunk == has_threshold, (
