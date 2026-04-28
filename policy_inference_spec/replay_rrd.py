@@ -492,7 +492,6 @@ def main(
     ),
     policy_id: str = typer.Option(DEFAULT_POLICY_ID, help="Model id sent in each request."),
     prompt: str = typer.Option(DEFAULT_PROMPT, help="Unified prompt in format task;subtask."),
-    prefix_change_start: int = typer.Option(0, min=0, help="Action prefix change start. Zero disables prefixes."),
     hz: int = typer.Option(50, min=1, help="Input sample rate."),
     prediction_hz: float = typer.Option(1.0, min=0.001, help="Prediction rate."),
     max_samples: int = typer.Option(250, min=1, help="Maximum replay windows."),
@@ -523,7 +522,6 @@ def main(
             prediction_hz=prediction_hz,
             max_samples=max_samples,
             action_prefix_steps=action_prefix_steps,
-            prefix_change_start=prefix_change_start,
         )
     )
     typer.echo(
