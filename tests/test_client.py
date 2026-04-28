@@ -35,6 +35,7 @@ from policy_inference_spec.protocol import (
     INFERENCE_TIME_KEY,
     JOINT_STATE_KEY,
     MODEL_ID_KEY,
+    PREFIX_CHANGE_START_KEY,
     POLICY_ID_KEY,
     PREFIX_CHANGE_START_KEY,
     PROMPT_KEY,
@@ -205,6 +206,38 @@ async def test_predict_preserves_optional_dumb_reward_goal_chunk_and_threshold()
         np.full((2, DEFAULT_HARDWARE_MODEL.action_dim), 0.75, dtype=np.float32),
     )
     assert sent_payload[DUMB_REWARD_THRESHOLD_KEY] == pytest.approx(0.5)
+
+
+@pytest.mark.asyncio
+async def test_predict_preserves_optional_action_prefix_and_prefix_change_start() -> None:
+    cfg = serialize_to_msgpack(_server_handshake_payload())
+    resp = serialize_to_msgpack(
+        {
+            ACTION_KEY: np.zeros((1, DEFAULT_HARDWARE_MODEL.action_dim), dtype=np.float32),
+            CONTEXT_EMBEDDINGS_KEY: np.zeros((CONTEXT_EMBEDDING_TOKENS, CONTEXT_EMBEDDING_WIDTH), dtype=np.float32),
+            POLICY_ID_KEY: "policy-1",
+        }
+    )
+    ws_mock = MagicMock()
+    ws_mock.recv = AsyncMock(side_effect=[cfg, resp])
+    ws_mock.send = AsyncMock()
+    ws_mock.close = AsyncMock()
+
+    async def fake_connect(*_a: object, **_kw: object) -> MagicMock:
+        return ws_mock
+
+    frame = _valid_wire_frame()
+    action_prefix = np.full((50, DEFAULT_HARDWARE_MODEL.action_dim), 0.25, dtype=np.float32)
+    with patch("policy_inference_spec.client.websockets.connect", side_effect=fake_connect):
+        client = RemotePolicyClient("ws://127.0.0.1:9/ws")
+        await client.predict(frame, action_prefix=action_prefix, prefix_change_start=7)
+        await client.aclose()
+
+    await_args = ws_mock.send.await_args
+    assert await_args is not None
+    sent_payload = deserialize_from_msgpack(await_args.args[0])
+    np.testing.assert_allclose(np.asarray(sent_payload[ACTION_PREFIX_KEY], dtype=np.float32), action_prefix)
+    assert sent_payload[PREFIX_CHANGE_START_KEY] == 7
 
 
 @pytest.mark.asyncio
