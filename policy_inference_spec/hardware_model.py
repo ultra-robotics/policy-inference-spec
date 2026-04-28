@@ -10,11 +10,11 @@ import numpy.typing as npt
 
 from policy_inference_spec.protocol import (
     ACTION_KEY,
-    CHUNK_ID_KEY,
     ACTION_PREFIX_KEY,
-    CONTEXT_EMBEDDINGS_KEY,
+    CHUNK_ID_KEY,
     CONTEXT_EMBEDDING_TOKENS,
     CONTEXT_EMBEDDING_WIDTH,
+    CONTEXT_EMBEDDINGS_KEY,
     DUMB_REWARD_GOAL_ACTION_CHUNK_KEY,
     DUMB_REWARD_THRESHOLD_KEY,
     ENDPOINT_KEY,
@@ -120,9 +120,7 @@ def _validate_joint_position_array(
     hm = HardwareModel(hardware_model)
     assert isinstance(value, np.ndarray), f"{JOINT_STATE_KEY} must be ndarray"
     assert value.ndim == 1, f"{JOINT_STATE_KEY} must be 1-D, got shape {value.shape}"
-    assert value.shape == (hm.state_dim,), (
-        f"{hm.value} {JOINT_STATE_KEY} must be ({hm.state_dim},), got {value.shape}"
-    )
+    assert value.shape == (hm.state_dim,), f"{hm.value} {JOINT_STATE_KEY} must be ({hm.state_dim},), got {value.shape}"
 
 
 def _wire_inference_request_keys(*, hardware_model: HardwareModel = DEFAULT_HARDWARE_MODEL) -> frozenset[str]:
@@ -224,7 +222,9 @@ def validate_wire_inference_request_frame(
     if has_goal_chunk:
         goal_action_chunk = frame[DUMB_REWARD_GOAL_ACTION_CHUNK_KEY]
         assert isinstance(goal_action_chunk, np.ndarray), f"{DUMB_REWARD_GOAL_ACTION_CHUNK_KEY} must be ndarray"
-        assert goal_action_chunk.ndim == 2, f"{DUMB_REWARD_GOAL_ACTION_CHUNK_KEY} must be 2-D, got {goal_action_chunk.shape}"
+        assert goal_action_chunk.ndim == 2, (
+            f"{DUMB_REWARD_GOAL_ACTION_CHUNK_KEY} must be 2-D, got {goal_action_chunk.shape}"
+        )
         assert goal_action_chunk.shape[1] == expected_action_dim, (
             f"{DUMB_REWARD_GOAL_ACTION_CHUNK_KEY} second dim must be {expected_action_dim}, got {goal_action_chunk.shape}"
         )
