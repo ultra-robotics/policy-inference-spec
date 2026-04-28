@@ -200,6 +200,7 @@ class RewardSignal:
 
 __all__ = [
     "ACTION_KEY",
+    "ACTION_PREFIX_KEY",
     "ACTION_SPACE_KEY",
     "CAMERA_NAMES_KEY",
     "CHUNK_ID_KEY",
@@ -228,6 +229,7 @@ __all__ = [
     "N_EXTERNAL_CAMERAS_KEY",
     "NEEDS_WRIST_CAMERA_KEY",
     "POLICY_ID_KEY",
+    "PREFIX_CHANGE_START_KEY",
     "PROMPT_KEY",
     "ProtocolPayload",
     "ProtocolValue",

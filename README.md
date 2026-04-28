@@ -64,6 +64,8 @@ uv run python -m policy_inference_spec.smoke --url ws://127.0.0.1:18090/ws --pre
   - `--hz`
   - `--prediction-hz`
   - `--max-samples`
+  - `--action-prefix-steps`
+  - `--prefix-change-start`
 
 Examples:
 
@@ -192,7 +194,7 @@ Only `HardwareModel.GEN2` is modeled in this package.
 
 ### Inference request validation
 
-`validate_wire_inference_request_frame()` requires the request keys to match exactly:
+`validate_wire_inference_request_frame()` requires these base request keys:
 
 - `observation/state`
 - `observation/images/main_image`
@@ -208,7 +210,14 @@ Current validation rules:
 - `model_id` must be `str`.
 - `observation/state` must be a 1-D `numpy.ndarray` with shape `(97,)`.
 - Each image field must be either JPEG `bytes` or a `numpy.ndarray`.
-- Extra keys are rejected.
+- Extra keys are rejected except the optional request fields below.
+
+Optional request fields:
+
+- `action_prefix`: floating 2-D `numpy.ndarray` shaped `(prefix_steps, 25)`. It carries only real prefix actions; clients must not pad it to the full policy horizon.
+- `prefix_change_start`: non-negative `int`. Required when `action_prefix` is present. In replay tooling this defaults to `--action-prefix-steps` unless `--prefix-change-start` is set.
+- `dumb_reward_goal_action_chunk` plus `dumb_reward_threshold`: optional debugging/reward fields.
+- `fast_mock_action_dim` plus `fast_mock_action_horizon`: optional testing fields.
 
 `RemotePolicyClient.predict()` accepts image arrays in HWC or single-item BHWC `uint8` form and JPEG-encodes them at quality 75 before sending. It does not resize them.
 

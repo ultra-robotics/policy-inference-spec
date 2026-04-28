@@ -23,6 +23,7 @@ from policy_inference_spec.hardware_model import (
 from policy_inference_spec.codec import deserialize_from_msgpack, serialize_to_msgpack
 from policy_inference_spec.protocol import (
     ACTION_KEY,
+    ACTION_PREFIX_KEY,
     CHUNK_ID_KEY,
     CONTEXT_EMBEDDINGS_KEY,
     CONTEXT_EMBEDDING_TOKENS,
@@ -35,6 +36,7 @@ from policy_inference_spec.protocol import (
     JOINT_STATE_KEY,
     MODEL_ID_KEY,
     POLICY_ID_KEY,
+    PREFIX_CHANGE_START_KEY,
     PROMPT_KEY,
     REWARD_DESCRIPTION_KEY,
     REWARDS_H_KEY,
@@ -318,6 +320,40 @@ def test_validate_wire_inference_request_frame_rejects_hardware_model_field() ->
         frame[f"observation/{camera}"] = jpeg
 
     with pytest.raises(AssertionError, match="wire inference keys"):
+        validate_wire_inference_request_frame(frame)
+
+
+def test_validate_wire_inference_request_frame_accepts_unpadded_action_prefix() -> None:
+    frame = _valid_wire_frame()
+    frame[ACTION_PREFIX_KEY] = np.zeros((3, DEFAULT_HARDWARE_MODEL.action_dim), dtype=np.float32)
+    frame[PREFIX_CHANGE_START_KEY] = 7
+
+    validate_wire_inference_request_frame(frame)
+
+
+def test_validate_wire_inference_request_frame_requires_action_prefix_pair() -> None:
+    frame = _valid_wire_frame()
+    frame[ACTION_PREFIX_KEY] = np.zeros((3, DEFAULT_HARDWARE_MODEL.action_dim), dtype=np.float32)
+
+    with pytest.raises(AssertionError, match=PREFIX_CHANGE_START_KEY):
+        validate_wire_inference_request_frame(frame)
+
+
+def test_validate_wire_inference_request_frame_rejects_bad_action_prefix_shape() -> None:
+    frame = _valid_wire_frame()
+    frame[ACTION_PREFIX_KEY] = np.zeros((3, DEFAULT_HARDWARE_MODEL.action_dim + 1), dtype=np.float32)
+    frame[PREFIX_CHANGE_START_KEY] = 3
+
+    with pytest.raises(AssertionError, match=ACTION_PREFIX_KEY):
+        validate_wire_inference_request_frame(frame)
+
+
+def test_validate_wire_inference_request_frame_rejects_nonfloating_action_prefix() -> None:
+    frame = _valid_wire_frame()
+    frame[ACTION_PREFIX_KEY] = np.zeros((3, DEFAULT_HARDWARE_MODEL.action_dim), dtype=np.int32)
+    frame[PREFIX_CHANGE_START_KEY] = 3
+
+    with pytest.raises(AssertionError, match=ACTION_PREFIX_KEY):
         validate_wire_inference_request_frame(frame)
 
 
