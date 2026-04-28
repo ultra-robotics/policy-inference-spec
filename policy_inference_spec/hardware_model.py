@@ -243,8 +243,8 @@ def validate_wire_inference_request_frame(
         action_prefix = frame[ACTION_PREFIX_KEY]
         assert isinstance(action_prefix, np.ndarray), f"{ACTION_PREFIX_KEY} must be ndarray"
         assert action_prefix.ndim == 2, f"{ACTION_PREFIX_KEY} must be 2-D, got {action_prefix.shape}"
-        assert action_prefix.shape == (50, expected_action_dim), (
-            f"{ACTION_PREFIX_KEY} must have shape {(50, expected_action_dim)}, got {action_prefix.shape}"
+        assert action_prefix.shape[-1] == expected_action_dim, (
+            f"{ACTION_PREFIX_KEY} must have shape {('*', expected_action_dim)}, got {action_prefix.shape}"
         )
         assert np.issubdtype(action_prefix.dtype, np.floating), (
             f"{ACTION_PREFIX_KEY} must be floating ndarray, got {action_prefix.dtype}"

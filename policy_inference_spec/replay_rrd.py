@@ -69,14 +69,7 @@ def build_action_prefix(action_hd: np.ndarray, prefix_change_start: int) -> np.n
         f"prefix_change_start must be less than action horizon {action_hd.shape[0]}, got {prefix_change_start}"
     )
     prefix_horizon = action_hd.shape[0] - prefix_change_start
-    return np.concatenate(
-        [
-            np.asarray(action_hd[:prefix_horizon], dtype=np.float32),
-            np.ones((prefix_change_start, action_hd.shape[1]), dtype=np.float32),
-        ],
-        axis=0,
-    )
-
+    return np.asarray(action_hd[:prefix_horizon], dtype=np.float32)
 
 def _strip_leading_singletons(array: np.ndarray, max_ndim: int) -> np.ndarray:
     result = np.asarray(array)
