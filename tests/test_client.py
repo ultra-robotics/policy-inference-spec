@@ -230,7 +230,9 @@ async def test_predict_preserves_optional_action_prefix_and_prefix_change_start(
     action_prefix = np.full((50, DEFAULT_HARDWARE_MODEL.action_dim), 0.25, dtype=np.float32)
     with patch("policy_inference_spec.client.websockets.connect", side_effect=fake_connect):
         client = RemotePolicyClient("ws://127.0.0.1:9/ws")
-        await client.predict(frame, action_prefix=action_prefix, prefix_change_start=7)
+        frame[ACTION_PREFIX_KEY] = action_prefix
+        frame[PREFIX_CHANGE_START_KEY] = 7
+        await client.predict(frame)
         await client.aclose()
 
     await_args = ws_mock.send.await_args
