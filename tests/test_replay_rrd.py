@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -88,10 +88,8 @@ async def test_replay_recording_orchestrates_predictions_and_logging(
         output_path=output_path,
         predict_url="ws://127.0.0.1:18090/ws",
         policy_id="policy-id",
-        prefix_change_start=6,
         max_samples=10,
-        action_prefix_steps=5,
-        prefix_change_start=3,
+        prefix_change_start=6,
     )
 
     assert summary.sample_count == 2
@@ -130,7 +128,7 @@ async def test_replay_recording_requires_samples(monkeypatch: pytest.MonkeyPatch
         await replay_rrd.replay_recording(recording_path=recording_path, output_path=tmp_path / "output.rrd")
 
 
-async def test_main_resolves_default_prefix_change_start(
+async def test_main_defaults_prefix_change_start_to_zero(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -149,10 +147,9 @@ async def test_main_resolves_default_prefix_change_start(
         hz: int,
         prediction_hz: float,
         max_samples: int,
-        action_prefix_steps: int,
         prefix_change_start: int,
     ) -> replay_rrd.ReplaySummary:
-        assert prefix_change_start == action_prefix_steps == 4
+        assert prefix_change_start == 0
         return replay_rrd.ReplaySummary(
             sample_count=max_samples,
             first_timestamp=pd.Timestamp("2026-04-01T00:00:01Z"),
@@ -177,16 +174,15 @@ async def test_main_resolves_default_prefix_change_start(
         hz=50,
         prediction_hz=1.0,
         max_samples=1,
-        action_prefix_steps=4,
         prefix_change_start=None,
     )
 
 
-async def test_main_rejects_change_start_after_prefix_length(tmp_path: Path) -> None:
+async def test_main_rejects_change_start_after_action_horizon(tmp_path: Path) -> None:
     recording_path = tmp_path / "input.rrd"
     recording_path.write_bytes(b"rrd")
 
-    with pytest.raises(AssertionError, match="prefix_change_start must be <= action_prefix_steps"):
+    with pytest.raises(AssertionError, match="prefix_change_start must be <= 50"):
         await asyncio.to_thread(
             replay_rrd.main,
             schema=SchemaName.GEN2_32D_STATE,
@@ -198,21 +194,8 @@ async def test_main_rejects_change_start_after_prefix_length(tmp_path: Path) -> 
             hz=50,
             prediction_hz=1.0,
             max_samples=1,
-            action_prefix_steps=2,
-            prefix_change_start=3,
+            prefix_change_start=51,
         )
-
-
-async def test_action_prefix_payload_uses_configured_change_start() -> None:
-    payload = replay_rrd._action_prefix_payload(
-        {"action": np.arange(5 * 2, dtype=np.float32).reshape(5, 2)},
-        action_prefix_steps=3,
-        prefix_change_start=2,
-    )
-
-    prefix = cast(np.ndarray, payload[ACTION_PREFIX_KEY])
-    assert prefix.shape == (3, 2)
-    assert payload[PREFIX_CHANGE_START_KEY] == 2
 
 
 async def test_predict_sample_adds_unpadded_action_prefix(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -262,8 +245,16 @@ async def test_predict_sample_adds_unpadded_action_prefix(monkeypatch: pytest.Mo
         async def __aexit__(self, exc_type: object, exc: object, traceback: object) -> None:
             pass
 
-        async def predict(self, request: dict[str, object]) -> RemotePolicyPrediction:
+        async def predict(
+            self,
+            request: dict[str, object],
+            *,
+            action_prefix: np.ndarray | None = None,
+            prefix_change_start: int | None = None,
+        ) -> RemotePolicyPrediction:
             captured["request"] = request
+            captured[ACTION_PREFIX_KEY] = action_prefix
+            captured[PREFIX_CHANGE_START_KEY] = prefix_change_start
             return RemotePolicyPrediction(
                 actions_d=np.zeros((8, feature_bundle.action_dim), dtype=np.float32),
                 context_embeddings=np.zeros((2, 128), dtype=np.float32),
@@ -280,16 +271,15 @@ async def test_predict_sample_adds_unpadded_action_prefix(monkeypatch: pytest.Mo
         "ws://127.0.0.1:18090/ws",
         "policy-id",
         "prompt",
-        action_prefix_steps=5,
         prefix_change_start=3,
     )
 
     request = captured["request"]
     assert isinstance(request, dict)
-    prefix = cast(np.ndarray, request[ACTION_PREFIX_KEY])
+    prefix = captured[ACTION_PREFIX_KEY]
     assert isinstance(prefix, np.ndarray)
     assert prefix.shape == (5, feature_bundle.action_dim)
-    assert request[PREFIX_CHANGE_START_KEY] == 3
+    assert captured[PREFIX_CHANGE_START_KEY] == 3
     arrays: dict[str, np.ndarray] = {}
     for key, value in sample.items():
         if key == "ts":
@@ -298,6 +288,8 @@ async def test_predict_sample_adds_unpadded_action_prefix(monkeypatch: pytest.Mo
         arrays[key] = value
     expected_actions = feature_bundle.preprocess(arrays)["action"]
     np.testing.assert_array_equal(prefix, expected_actions[:5])
+
+
 def test_build_action_prefix_returns_none_when_disabled() -> None:
     action_hd = np.zeros((50, 25), dtype=np.float32)
     assert replay_rrd.build_action_prefix(action_hd, 0) is None
@@ -307,5 +299,5 @@ def test_build_action_prefix_matches_pi_prefix_layout() -> None:
     action_hd = np.arange(50 * 25, dtype=np.float32).reshape(50, 25)
     action_prefix = replay_rrd.build_action_prefix(action_hd, 7)
     assert action_prefix is not None
-    np.testing.assert_allclose(action_prefix[:43], action_hd[:43])
-    np.testing.assert_allclose(action_prefix[43:], np.ones((7, 25), dtype=np.float32))
+    assert action_prefix.shape == (43, 25)
+    np.testing.assert_allclose(action_prefix, action_hd[:43])
