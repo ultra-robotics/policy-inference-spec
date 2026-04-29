@@ -247,7 +247,7 @@ def validate_wire_inference_request_frame(
     has_action_prefix = ACTION_PREFIX_KEY in frame
     has_prefix_change_start = PREFIX_CHANGE_START_KEY in frame
     assert has_action_prefix == has_prefix_change_start, (
-        f"{ACTION_PREFIX_KEY} and {PREFIX_CHANGE_START_KEY} must be provided together"
+        f"{ACTION_PREFIX_KEY} and {PREFIX_CHANGE_START_KEY} must be provided as a pair, or not at all."
     )
     if has_action_prefix:
         action_prefix = frame[ACTION_PREFIX_KEY]

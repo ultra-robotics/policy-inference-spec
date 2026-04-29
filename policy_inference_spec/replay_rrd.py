@@ -227,9 +227,9 @@ async def predict_sample(
                 "observation/images/right_wrist_image": np.asarray(
                     _strip_leading_singletons(processed_sample["right_wrist"], 4), dtype=np.uint8
                 ),
+                ACTION_PREFIX_KEY: action_prefix,
+                PREFIX_CHANGE_START_KEY: prefix_change_start if action_prefix is not None else None,
             },
-            action_prefix=action_prefix,
-            prefix_change_start=prefix_change_start if action_prefix is not None else None,
         )
 
 

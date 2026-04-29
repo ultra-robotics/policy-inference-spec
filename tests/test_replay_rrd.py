@@ -253,8 +253,8 @@ async def test_predict_sample_adds_unpadded_action_prefix(monkeypatch: pytest.Mo
             prefix_change_start: int | None = None,
         ) -> RemotePolicyPrediction:
             captured["request"] = request
-            captured[ACTION_PREFIX_KEY] = action_prefix
-            captured[PREFIX_CHANGE_START_KEY] = prefix_change_start
+            captured[ACTION_PREFIX_KEY] = request.get(ACTION_PREFIX_KEY)
+            captured[PREFIX_CHANGE_START_KEY] = request.get(PREFIX_CHANGE_START_KEY)
             return RemotePolicyPrediction(
                 actions_d=np.zeros((8, feature_bundle.action_dim), dtype=np.float32),
                 context_embeddings=np.zeros((2, 128), dtype=np.float32),
