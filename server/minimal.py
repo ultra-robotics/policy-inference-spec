@@ -34,7 +34,8 @@ from policy_inference_spec.protocol import (
     JOINT_STATE_KEY,
     MODEL_ID_KEY,
     POLICY_ID_KEY,
-    PROMPT_KEY,
+    SUBTASK_KEY,
+    TASK_KEY,
     REWARD_DESCRIPTION_KEY,
     REWARDS_H_KEY,
     STATUS_KEY,
@@ -157,7 +158,8 @@ async def handle_inference_connection(
             )
             continue
         validate_wire_inference_request_frame(frame)
-        _ = frame[PROMPT_KEY]
+        _ = frame[TASK_KEY]
+        _ = frame[SUBTASK_KEY]
         _ = frame[MODEL_ID_KEY]
         resp = _inference_response(frame, action_horizon=action_horizon)
         await connection.send(serialize_to_msgpack(resp))

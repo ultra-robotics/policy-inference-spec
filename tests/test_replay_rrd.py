@@ -11,7 +11,7 @@ import pytest
 import policy_inference_spec.replay_rrd as replay_rrd
 from policy_inference_spec.client import RemotePolicyPrediction
 from policy_inference_spec.feature_engineering import FeatureBundle, ScalarFeature, SchemaName, VideoFeature
-from policy_inference_spec.protocol import ACTION_PREFIX_KEY, PREFIX_CHANGE_START_KEY
+from policy_inference_spec.protocol import ACTION_PREFIX_KEY, PREFIX_CHANGE_START_KEY, SUBTASK_KEY, TASK_KEY
 
 pytestmark = pytest.mark.asyncio
 
@@ -50,13 +50,15 @@ async def test_replay_recording_orchestrates_predictions_and_logging(
         sample: object,
         predict_url: str,
         policy_id: str,
-        prompt: str,
+        task: str,
+        subtask: str,
         action_prefix_steps: int,
         prefix_change_start: int,
     ) -> RemotePolicyPrediction:
         assert predict_url == "ws://127.0.0.1:18090/ws"
         assert policy_id == "policy-id"
-        assert prompt == "tower_stack_unstack;stack rings"
+        assert task == "tower_stack_unstack"
+        assert subtask == "stack rings"
         assert action_prefix_steps == 5
         assert prefix_change_start == 3
         assert sample in samples
@@ -146,7 +148,8 @@ async def test_main_resolves_default_prefix_change_start(
         output_path: Path,
         predict_url: str,
         policy_id: str,
-        prompt: str,
+        task: str,
+        subtask: str,
         hz: int,
         prediction_hz: float,
         max_samples: int,
@@ -174,7 +177,8 @@ async def test_main_resolves_default_prefix_change_start(
         output_path=output_path,
         predict_url="ws://127.0.0.1:18090/ws",
         policy_id="policy-id",
-        prompt="prompt",
+        task="task",
+        subtask="subtask",
         hz=50,
         prediction_hz=1.0,
         max_samples=1,
@@ -195,7 +199,8 @@ async def test_main_rejects_change_start_after_prefix_length(tmp_path: Path) -> 
             output_path=tmp_path / "output.rrd",
             predict_url="ws://127.0.0.1:18090/ws",
             policy_id="policy-id",
-            prompt="prompt",
+            task="task",
+            subtask="subtask",
             hz=50,
             prediction_hz=1.0,
             max_samples=1,
@@ -280,13 +285,16 @@ async def test_predict_sample_adds_unpadded_action_prefix(monkeypatch: pytest.Mo
         sample,
         "ws://127.0.0.1:18090/ws",
         "policy-id",
-        "prompt",
+        "task",
+        "subtask",
         action_prefix_steps=5,
         prefix_change_start=3,
     )
 
     request = captured["request"]
     assert isinstance(request, dict)
+    assert request[TASK_KEY] == "task"
+    assert request[SUBTASK_KEY] == "subtask"
     prefix = cast(np.ndarray, request[ACTION_PREFIX_KEY])
     assert isinstance(prefix, np.ndarray)
     assert prefix.shape == (5, feature_bundle.action_dim)

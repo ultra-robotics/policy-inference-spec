@@ -29,7 +29,6 @@ from policy_inference_spec.protocol import (
     JOINT_STATE_KEY,
     MODEL_ID_KEY,
     POLICY_ID_KEY,
-    PROMPT_KEY,
     ProtocolPayload,
     ProtocolValue,
     REWARD_DESCRIPTION_KEY,
@@ -37,6 +36,8 @@ from policy_inference_spec.protocol import (
     RewardSignal,
     ServerFeature,
     ServerHandshake,
+    SUBTASK_KEY,
+    TASK_KEY,
     make_server_handshake,
 )
 from policy_inference_spec.hardware_model import (
@@ -69,7 +70,6 @@ __all__ = [
     "MODEL_ID_KEY",
     "NdarrayField",
     "POLICY_ID_KEY",
-    "PROMPT_KEY",
     "ProtocolPayload",
     "ProtocolValue",
     "REWARD_DESCRIPTION_KEY",
@@ -79,6 +79,8 @@ __all__ = [
     "RewardSignal",
     "ServerFeature",
     "ServerHandshake",
+    "SUBTASK_KEY",
+    "TASK_KEY",
     "deserialize_from_msgpack",
     "encode_image",
     "make_server_handshake",

@@ -25,7 +25,8 @@ from policy_inference_spec.protocol import (
     OBSERVATION_ENV_KEY,
     OBSERVATION_HIDDEN_KEY,
     POLICY_ID_KEY,
-    PROMPT_KEY,
+    SUBTASK_KEY,
+    TASK_KEY,
     ACTION_PREFIX_KEY,
     PREFIX_CHANGE_START_KEY,
     ServerFeature,
@@ -133,7 +134,8 @@ def _wire_inference_request_keys(*, hardware_model: HardwareModel = DEFAULT_HARD
         {
             JOINT_STATE_KEY,
             *_observation_keys(hardware_model),
-            PROMPT_KEY,
+            TASK_KEY,
+            SUBTASK_KEY,
             MODEL_ID_KEY,
         }
     )
@@ -200,7 +202,8 @@ def validate_wire_inference_request_frame(
     allowed = required | _optional_wire_inference_request_keys()
     keys = set(frame.keys())
     assert required <= keys <= allowed, f"wire inference keys {keys} must include {required} and stay within {allowed}"
-    assert isinstance(frame[PROMPT_KEY], str), f"{PROMPT_KEY} must be str"
+    assert isinstance(frame[TASK_KEY], str), f"{TASK_KEY} must be str"
+    assert isinstance(frame[SUBTASK_KEY], str), f"{SUBTASK_KEY} must be str"
     assert isinstance(frame[MODEL_ID_KEY], str), f"{MODEL_ID_KEY} must be str"
     fast_mock_action_dim_raw = frame.get(FAST_MOCK_ACTION_DIM_KEY)
     fast_mock_action_horizon_raw = frame.get(FAST_MOCK_ACTION_HORIZON_KEY)

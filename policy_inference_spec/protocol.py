@@ -13,7 +13,8 @@ DEFAULT_INFERENCE_SERVER_PORT = 18090
 JOINT_STATE_KEY = "observation/state"
 OBSERVATION_HIDDEN_KEY = "observation/hidden"
 OBSERVATION_ENV_KEY = "observation/env"
-PROMPT_KEY = "prompt"
+TASK_KEY = "task"
+SUBTASK_KEY = "subtask"
 ACTION_KEY = "action"
 CONTEXT_EMBEDDINGS_KEY = "context_embeddings"
 INFERENCE_TIME_KEY = "inference_time"
@@ -230,7 +231,6 @@ __all__ = [
     "NEEDS_WRIST_CAMERA_KEY",
     "POLICY_ID_KEY",
     "PREFIX_CHANGE_START_KEY",
-    "PROMPT_KEY",
     "ProtocolPayload",
     "ProtocolValue",
     "REWARD_DESCRIPTION_KEY",
@@ -238,6 +238,8 @@ __all__ = [
     "RewardSignal",
     "SERVER_FEATURES_KEY",
     "STATUS_KEY",
+    "SUBTASK_KEY",
+    "TASK_KEY",
     "ServerFeature",
     "ServerHandshake",
     "make_server_handshake",

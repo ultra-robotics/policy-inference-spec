@@ -37,7 +37,8 @@ from policy_inference_spec.protocol import (
     MODEL_ID_KEY,
     POLICY_ID_KEY,
     PREFIX_CHANGE_START_KEY,
-    PROMPT_KEY,
+    SUBTASK_KEY,
+    TASK_KEY,
     REWARD_DESCRIPTION_KEY,
     REWARDS_H_KEY,
     STATUS_KEY,
@@ -53,7 +54,8 @@ def _valid_wire_frame() -> dict[str, Any]:
     jpeg = _minimal_jpeg()
     frame: dict[str, str | np.ndarray | bytes] = {
         JOINT_STATE_KEY: np.zeros(DEFAULT_HARDWARE_MODEL.state_dim, dtype=np.float32),
-        PROMPT_KEY: "test",
+        TASK_KEY: "test",
+        SUBTASK_KEY: "subtask",
         MODEL_ID_KEY: "",
     }
     for camera in DEFAULT_HARDWARE_MODEL.cameras:
@@ -229,7 +231,8 @@ async def test_predict_jpeg_encodes_ndarray_images_without_resizing() -> None:
 
     frame: dict[str, Any] = {
         JOINT_STATE_KEY: np.zeros(DEFAULT_HARDWARE_MODEL.state_dim, dtype=np.float32),
-        PROMPT_KEY: "test",
+        TASK_KEY: "test",
+        SUBTASK_KEY: "subtask",
         MODEL_ID_KEY: "",
         "observation/images/main_image": np.zeros((23, 37, 3), dtype=np.uint8),
         "observation/images/left_wrist_image": np.zeros((19, 29, 3), dtype=np.uint8),
@@ -313,7 +316,8 @@ def test_validate_wire_inference_request_frame_rejects_hardware_model_field() ->
     frame: dict[str, str | np.ndarray | bytes] = {
         "hardware_model": "gen2",
         JOINT_STATE_KEY: np.zeros(DEFAULT_HARDWARE_MODEL.state_dim, dtype=np.float32),
-        PROMPT_KEY: "test",
+        TASK_KEY: "test",
+        SUBTASK_KEY: "subtask",
         MODEL_ID_KEY: "",
     }
     for camera in DEFAULT_HARDWARE_MODEL.cameras:
