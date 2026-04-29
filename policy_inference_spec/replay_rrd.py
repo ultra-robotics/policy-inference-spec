@@ -194,6 +194,27 @@ class RerunReplayer:
                 most_recent_sample.update(data)
 
 
+def _action_prefix_payload(
+    processed_sample: dict[str, np.ndarray],
+    action_prefix_steps: int,
+    prefix_change_start: int,
+) -> dict[str, object]:
+    assert action_prefix_steps >= 0, f"action_prefix_steps must be non-negative, got {action_prefix_steps}"
+    if action_prefix_steps == 0:
+        return {}
+
+    actions = processed_sample["action"]
+    assert actions.ndim == 2, f"Expected action prefix source to be 2-D, got {actions.shape}"
+    assert action_prefix_steps <= actions.shape[0], (
+        f"action_prefix_steps must be <= action horizon {actions.shape[0]}, got {action_prefix_steps}"
+    )
+    action_prefix = actions[:action_prefix_steps].astype(np.float32, copy=False)
+    return {
+        ACTION_PREFIX_KEY: action_prefix,
+        PREFIX_CHANGE_START_KEY: prefix_change_start,
+    }
+
+
 async def predict_sample(
     feature_bundle: FeatureBundle,
     sample: dict[str, np.ndarray | pd.Timestamp],
@@ -395,6 +416,8 @@ async def replay_recording(
     hz: int = 50,
     prediction_hz: float = 1.0,
     max_samples: int = 250,
+    action_prefix_steps: int = 0,
+    prefix_change_start: int = 0,
 ) -> ReplaySummary:
     assert max_samples > 0, f"max_samples must be positive, got {max_samples}"
     assert prefix_change_start >= 0, f"prefix_change_start must be non-negative, got {prefix_change_start}"
@@ -494,6 +517,8 @@ def main(
             hz=hz,
             prediction_hz=prediction_hz,
             max_samples=max_samples,
+            action_prefix_steps=action_prefix_steps,
+            prefix_change_start=prefix_change_start,
         )
     )
     typer.echo(
