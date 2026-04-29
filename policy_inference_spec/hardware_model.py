@@ -10,10 +10,11 @@ import numpy.typing as npt
 
 from policy_inference_spec.protocol import (
     ACTION_KEY,
+    ACTION_PREFIX_KEY,
     CHUNK_ID_KEY,
-    CONTEXT_EMBEDDINGS_KEY,
     CONTEXT_EMBEDDING_TOKENS,
     CONTEXT_EMBEDDING_WIDTH,
+    CONTEXT_EMBEDDINGS_KEY,
     DUMB_REWARD_GOAL_ACTION_CHUNK_KEY,
     DUMB_REWARD_THRESHOLD_KEY,
     ENDPOINT_KEY,
@@ -25,9 +26,8 @@ from policy_inference_spec.protocol import (
     OBSERVATION_ENV_KEY,
     OBSERVATION_HIDDEN_KEY,
     POLICY_ID_KEY,
-    PROMPT_KEY,
-    ACTION_PREFIX_KEY,
     PREFIX_CHANGE_START_KEY,
+    PROMPT_KEY,
     ServerFeature,
     ServerHandshake,
     make_server_handshake,
@@ -120,9 +120,7 @@ def _validate_joint_position_array(
     hm = HardwareModel(hardware_model)
     assert isinstance(value, np.ndarray), f"{JOINT_STATE_KEY} must be ndarray"
     assert value.ndim == 1, f"{JOINT_STATE_KEY} must be 1-D, got shape {value.shape}"
-    assert value.shape == (hm.state_dim,), (
-        f"{hm.value} {JOINT_STATE_KEY} must be ({hm.state_dim},), got {value.shape}"
-    )
+    assert value.shape == (hm.state_dim,), f"{hm.value} {JOINT_STATE_KEY} must be ({hm.state_dim},), got {value.shape}"
 
 
 def _wire_inference_request_keys(*, hardware_model: HardwareModel = DEFAULT_HARDWARE_MODEL) -> frozenset[str]:
@@ -242,7 +240,9 @@ def validate_wire_inference_request_frame(
     if has_goal_chunk:
         goal_action_chunk = frame[DUMB_REWARD_GOAL_ACTION_CHUNK_KEY]
         assert isinstance(goal_action_chunk, np.ndarray), f"{DUMB_REWARD_GOAL_ACTION_CHUNK_KEY} must be ndarray"
-        assert goal_action_chunk.ndim == 2, f"{DUMB_REWARD_GOAL_ACTION_CHUNK_KEY} must be 2-D, got {goal_action_chunk.shape}"
+        assert goal_action_chunk.ndim == 2, (
+            f"{DUMB_REWARD_GOAL_ACTION_CHUNK_KEY} must be 2-D, got {goal_action_chunk.shape}"
+        )
         assert goal_action_chunk.shape[1] == expected_action_dim, (
             f"{DUMB_REWARD_GOAL_ACTION_CHUNK_KEY} second dim must be {expected_action_dim}, got {goal_action_chunk.shape}"
         )
@@ -262,6 +262,24 @@ def validate_wire_inference_request_frame(
         assert isinstance(obs_env, np.ndarray), f"{OBSERVATION_ENV_KEY} must be ndarray"
         assert obs_env.ndim == 1, f"{OBSERVATION_ENV_KEY} must be 1-D, got {obs_env.shape}"
         assert np.issubdtype(obs_env.dtype, np.floating), f"{OBSERVATION_ENV_KEY} must be floating"
+    has_action_prefix = ACTION_PREFIX_KEY in frame
+    has_prefix_change_start = PREFIX_CHANGE_START_KEY in frame
+    assert has_action_prefix == has_prefix_change_start, (
+        f"{ACTION_PREFIX_KEY} and {PREFIX_CHANGE_START_KEY} must be provided as a pair, or not at all."
+    )
+    if has_action_prefix:
+        action_prefix = frame[ACTION_PREFIX_KEY]
+        assert isinstance(action_prefix, np.ndarray), f"{ACTION_PREFIX_KEY} must be ndarray"
+        assert action_prefix.ndim == 2, f"{ACTION_PREFIX_KEY} must be 2-D, got {action_prefix.shape}"
+        assert action_prefix.shape[-1] == expected_action_dim, (
+            f"{ACTION_PREFIX_KEY} must have shape {('*', expected_action_dim)}, got {action_prefix.shape}"
+        )
+        assert np.issubdtype(action_prefix.dtype, np.floating), (
+            f"{ACTION_PREFIX_KEY} must be floating ndarray, got {action_prefix.dtype}"
+        )
+        prefix_change_start = frame[PREFIX_CHANGE_START_KEY]
+        assert isinstance(prefix_change_start, int), f"{PREFIX_CHANGE_START_KEY} must be int"
+        assert 0 < prefix_change_start < 50, f"{PREFIX_CHANGE_START_KEY} must be in [1, 49], got {prefix_change_start}"
     _validate_joint_position_array(frame[JOINT_STATE_KEY], hardware_model)
     for k in _observation_keys(hardware_model):
         v = frame[k]

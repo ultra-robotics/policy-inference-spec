@@ -23,11 +23,13 @@ from policy_inference_spec.hardware_model import validate_wire_inference_request
 from policy_inference_spec.protocol import (
     ACTION_KEY,
     CHUNK_ID_KEY,
+    ACTION_PREFIX_KEY,
     CONTEXT_EMBEDDINGS_KEY,
     ENDPOINT_KEY,
     ENDPOINT_REWARD,
     INFERENCE_TIME_KEY,
     JOINT_STATE_KEY,
+    PREFIX_CHANGE_START_KEY,
     REWARDS_H_KEY,
     RewardSignal,
     STATUS_KEY,
@@ -237,7 +239,10 @@ class RemotePolicyClient:
             rewards_ack = response.get(REWARDS_H_KEY)
             assert rewards_ack is None or isinstance(rewards_ack, list), f"{REWARDS_H_KEY} must be list[float]"
 
-    async def predict(self, wire_frame: dict[str, Any]) -> RemotePolicyPrediction:
+    async def predict(
+        self,
+        wire_frame: dict[str, Any],
+    ) -> RemotePolicyPrediction:
         try:
             await self._ensure_ws()
             wire_frame = self._encode_wire_frame_images(wire_frame)
