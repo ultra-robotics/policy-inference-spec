@@ -253,10 +253,10 @@ def validate_wire_inference_request_frame(
         assert isinstance(threshold, (int, float)), f"{DUMB_REWARD_THRESHOLD_KEY} must be numeric"
         assert float(threshold) > 0.0, f"{DUMB_REWARD_THRESHOLD_KEY} must be positive"
     if OBSERVATION_HIDDEN_KEY in frame:
-            hidden = frame[OBSERVATION_HIDDEN_KEY]
-            assert isinstance(hidden, np.ndarray), f"{OBSERVATION_HIDDEN_KEY} must be ndarray"
-            assert hidden.ndim == 1, f"{OBSERVATION_HIDDEN_KEY} must be 1-D, got {hidden.shape}"
-            assert np.issubdtype(hidden.dtype, np.floating), f"{OBSERVATION_HIDDEN_KEY} must be floating"
+        hidden = frame[OBSERVATION_HIDDEN_KEY]
+        assert isinstance(hidden, np.ndarray), f"{OBSERVATION_HIDDEN_KEY} must be ndarray"
+        assert hidden.ndim == 1, f"{OBSERVATION_HIDDEN_KEY} must be 1-D, got {hidden.shape}"
+        assert np.issubdtype(hidden.dtype, np.floating), f"{OBSERVATION_HIDDEN_KEY} must be floating"
     if OBSERVATION_ENV_KEY in frame:
         obs_env = frame[OBSERVATION_ENV_KEY]
         assert isinstance(obs_env, np.ndarray), f"{OBSERVATION_ENV_KEY} must be ndarray"
