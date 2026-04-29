@@ -194,27 +194,6 @@ class RerunReplayer:
                 most_recent_sample.update(data)
 
 
-def _action_prefix_payload(
-    processed_sample: dict[str, np.ndarray],
-    action_prefix_steps: int,
-    prefix_change_start: int,
-) -> dict[str, object]:
-    assert action_prefix_steps >= 0, f"action_prefix_steps must be non-negative, got {action_prefix_steps}"
-    if action_prefix_steps == 0:
-        return {}
-
-    actions = processed_sample["action"]
-    assert actions.ndim == 2, f"Expected action prefix source to be 2-D, got {actions.shape}"
-    assert action_prefix_steps <= actions.shape[0], (
-        f"action_prefix_steps must be <= action horizon {actions.shape[0]}, got {action_prefix_steps}"
-    )
-    action_prefix = actions[:action_prefix_steps].astype(np.float32, copy=False)
-    return {
-        ACTION_PREFIX_KEY: action_prefix,
-        PREFIX_CHANGE_START_KEY: prefix_change_start,
-    }
-
-
 async def predict_sample(
     feature_bundle: FeatureBundle,
     sample: dict[str, np.ndarray | pd.Timestamp],
@@ -231,7 +210,10 @@ async def predict_sample(
         arrays[key] = value
     processed_sample = feature_bundle.preprocess(arrays)
     action_hd = np.asarray(_strip_leading_singletons(processed_sample["action"], 2), dtype=np.float32)
-    action_prefix = build_action_prefix(action_hd, prefix_change_start)
+    if prefix_change_start > 0:
+        action_prefix = build_action_prefix(action_hd, prefix_change_start)
+    else:
+        action_prefix = None
     async with RemotePolicyClient(predict_url) as inference_client:
         return await inference_client.predict(
             {
@@ -413,7 +395,6 @@ async def replay_recording(
     hz: int = 50,
     prediction_hz: float = 1.0,
     max_samples: int = 250,
-    action_prefix_steps: int = 0,
 ) -> ReplaySummary:
     assert max_samples > 0, f"max_samples must be positive, got {max_samples}"
     assert prefix_change_start >= 0, f"prefix_change_start must be non-negative, got {prefix_change_start}"
@@ -488,7 +469,6 @@ def main(
     hz: int = typer.Option(50, min=1, help="Input sample rate."),
     prediction_hz: float = typer.Option(1.0, min=0.001, help="Prediction rate."),
     max_samples: int = typer.Option(250, min=1, help="Maximum replay windows."),
-    action_prefix_steps: int = typer.Option(0, min=0, help="Ground-truth action prefix rows sent per request."),
     prefix_change_start: int | None = typer.Option(
         None,
         help="prefix_change_start sent with action_prefix. Defaults to --action-prefix-steps.",
@@ -496,10 +476,10 @@ def main(
     ),
 ) -> None:
     if prefix_change_start is None:
-        prefix_change_start = action_prefix_steps
+        prefix_change_start = 0
     assert prefix_change_start >= 0, f"prefix_change_start must be non-negative, got {prefix_change_start}"
-    assert prefix_change_start <= action_prefix_steps, (
-        f"prefix_change_start must be <= action_prefix_steps, got {prefix_change_start} > {action_prefix_steps}"
+    assert prefix_change_start <= 50, (
+        f"prefix_change_start must be <= 50, got {prefix_change_start}"
     )
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     summary = asyncio.run(
@@ -514,7 +494,6 @@ def main(
             hz=hz,
             prediction_hz=prediction_hz,
             max_samples=max_samples,
-            action_prefix_steps=action_prefix_steps,
         )
     )
     typer.echo(
