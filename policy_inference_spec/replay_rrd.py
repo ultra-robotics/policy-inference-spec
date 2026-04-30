@@ -29,7 +29,8 @@ from policy_inference_spec.protocol import (
     JOINT_STATE_KEY,
     MODEL_ID_KEY,
     PREFIX_CHANGE_START_KEY,
-    PROMPT_KEY,
+    SUBTASK_KEY,
+    TASK_KEY,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -39,7 +40,8 @@ DEFAULT_RECORDING_PATH = Path(
 ).expanduser()
 DEFAULT_OUTPUT_PATH = Path("output.rrd")
 DEFAULT_POLICY_ID = "ultra-ai/bc-nextgen-v0/just-rings-bigger-3:v24"
-DEFAULT_PROMPT = "tower_stack_unstack;stack rings"
+DEFAULT_TASK = "tower_stack_unstack"
+DEFAULT_SUBTASK = "stack_rings"
 DEFAULT_PREDICT_URL = f"ws://127.0.0.1:{DEFAULT_INFERENCE_SERVER_PORT}/ws"
 RERUN_APP_ID = "offline_policy_eval_predictions"
 IMAGE_STREAMS = ("head", "left_wrist", "right_wrist")
@@ -202,10 +204,13 @@ async def predict_sample(
     sample: dict[str, np.ndarray | pd.Timestamp],
     predict_url: str,
     policy_id: str,
-    prompt: str,
+    task: str,
+    subtask: str,
     action_prefix_steps: int = 0,
     prefix_change_start: int = 0,
 ) -> RemotePolicyPrediction:
+    assert task, "task cannot be empty"
+    assert subtask, "subtask cannot be empty"
     arrays: dict[str, np.ndarray] = {}
     for key, value in sample.items():
         if key == "ts":
@@ -217,7 +222,8 @@ async def predict_sample(
         return await inference_client.predict(
             {
                 JOINT_STATE_KEY: processed_sample["observation.state"],
-                PROMPT_KEY: prompt,
+                TASK_KEY: task,
+                SUBTASK_KEY: subtask,
                 MODEL_ID_KEY: policy_id,
                 "observation/images/main_image": processed_sample["head"],
                 "observation/images/left_wrist_image": processed_sample["left_wrist"],
@@ -384,7 +390,8 @@ async def replay_recording(
     output_path: Path = DEFAULT_OUTPUT_PATH,
     predict_url: str = DEFAULT_PREDICT_URL,
     policy_id: str = DEFAULT_POLICY_ID,
-    prompt: str = DEFAULT_PROMPT,
+    task: str = DEFAULT_TASK,
+    subtask: str = DEFAULT_SUBTASK,
     hz: int = 50,
     prediction_hz: float = 1.0,
     max_samples: int = 250,
@@ -415,7 +422,8 @@ async def replay_recording(
                     sample,
                     predict_url,
                     policy_id,
-                    prompt,
+                    task,
+                    subtask,
                     action_prefix_steps=action_prefix_steps,
                     prefix_change_start=prefix_change_start,
                 )
@@ -467,7 +475,8 @@ def main(
         help="Inference server WebSocket URL.",
     ),
     policy_id: str = typer.Option(DEFAULT_POLICY_ID, help="Model id sent in each request."),
-    prompt: str = typer.Option(DEFAULT_PROMPT, help="Unified prompt in format task;subtask."),
+    task: str = typer.Option(DEFAULT_TASK, help="Task sent in each request."),
+    subtask: str = typer.Option(DEFAULT_SUBTASK, help="Subtask sent in each request."),
     hz: int = typer.Option(50, min=1, help="Input sample rate."),
     prediction_hz: float = typer.Option(1.0, min=0.001, help="Prediction rate."),
     max_samples: int = typer.Option(250, min=1, help="Maximum replay windows."),
@@ -492,7 +501,8 @@ def main(
             output_path=output_path,
             predict_url=predict_url,
             policy_id=policy_id,
-            prompt=prompt,
+            task=task,
+            subtask=subtask,
             hz=hz,
             prediction_hz=prediction_hz,
             max_samples=max_samples,

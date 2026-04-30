@@ -13,7 +13,8 @@ from policy_inference_spec.protocol import (
     CONTEXT_EMBEDDING_WIDTH,
     JOINT_STATE_KEY,
     MODEL_ID_KEY,
-    PROMPT_KEY,
+    SUBTASK_KEY,
+    TASK_KEY,
     ServerFeature,
 )
 from server.minimal import (
@@ -33,7 +34,8 @@ def _random_predict_frame() -> dict[str, object]:
     height, width = DEFAULT_HARDWARE_MODEL.image_resolution
     frame: dict[str, object] = {
         JOINT_STATE_KEY: rng.standard_normal(DEFAULT_HARDWARE_MODEL.state_dim, dtype=np.float32),
-        PROMPT_KEY: "",
+        TASK_KEY: "",
+        SUBTASK_KEY: "",
         MODEL_ID_KEY: "",
     }
     for cam in DEFAULT_HARDWARE_MODEL.cameras:
