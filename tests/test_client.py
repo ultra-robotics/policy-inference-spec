@@ -132,8 +132,6 @@ async def test_predict_round_trip_with_mock_websocket() -> None:
     assert pred.chunk_id == "chunk-xyz"
     assert pred.actions_d.shape == (4, DEFAULT_HARDWARE_MODEL.action_dim)
     assert pred.actions_d.dtype == np.float32
-    assert pred.context_embeddings.shape == (0, CONTEXT_EMBEDDING_WIDTH)
-    assert pred.context_embeddings.dtype == np.float32
     assert pred.total_latency_ms >= 0.0
     ws_mock.send.assert_called_once()
     assert ws_mock.recv.call_count == 2
@@ -189,8 +187,6 @@ async def test_predict_accepts_response_without_context_embeddings() -> None:
         pred = await client.predict(_valid_wire_frame())
         await client.aclose()
 
-    assert pred.context_embeddings.shape == (0, CONTEXT_EMBEDDING_WIDTH)
-    assert pred.context_embeddings.dtype == np.float32
 
 
 @pytest.mark.asyncio

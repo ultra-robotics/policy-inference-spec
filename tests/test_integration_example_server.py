@@ -53,8 +53,6 @@ async def test_client_predict_against_example_server() -> None:
     expected = example_policy_actions(cast(np.ndarray[Any, Any], frame[JOINT_STATE_KEY]))
     assert pred.actions_d.shape == expected.shape
     assert pred.actions_d.dtype == np.float32
-    assert pred.context_embeddings.shape == (0, CONTEXT_EMBEDDING_WIDTH)
-    assert isinstance(pred.context_embeddings, np.ndarray)
     assert np.allclose(pred.actions_d, expected)
     assert pred.policy_id == EXAMPLE_POLICY_ID
     assert isinstance(pred.chunk_id, str) and pred.chunk_id

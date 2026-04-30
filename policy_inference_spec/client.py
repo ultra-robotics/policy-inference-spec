@@ -58,7 +58,6 @@ def _wire_image_to_hwc_uint8(value: Any) -> npt.NDArray[np.uint8]:
 @dataclass(frozen=True)
 class RemotePolicyPrediction:
     actions_d: npt.NDArray[np.float32]
-    context_embeddings: npt.NDArray[np.float32]
     total_latency_ms: float
     policy_id: str
     chunk_id: str | None
@@ -286,15 +285,9 @@ class RemotePolicyClient:
         self._record_latency(total_latency_ms=total_latency_ms, server_latency_ms=server_latency_ms)
 
         actions_d = np.array(actions, dtype=np.float32)
-        context_embeddings_raw = result.get(CONTEXT_EMBEDDINGS_KEY)
-        context_embeddings = (
-            np.zeros((0, CONTEXT_EMBEDDING_WIDTH), dtype=np.float32)
-            if context_embeddings_raw is None
-            else np.array(context_embeddings_raw, dtype=np.float32)
         )
         return RemotePolicyPrediction(
             actions_d=actions_d,
-            context_embeddings=context_embeddings,
             total_latency_ms=total_latency_ms,
             policy_id=policy_id_used,
             chunk_id=chunk_id_used,
