@@ -25,9 +25,6 @@ from policy_inference_spec.protocol import (
     ACTION_KEY,
     ACTION_PREFIX_KEY,
     CHUNK_ID_KEY,
-    CONTEXT_EMBEDDINGS_KEY,
-    CONTEXT_EMBEDDING_TOKENS,
-    CONTEXT_EMBEDDING_WIDTH,
     DUMB_REWARD_GOAL_ACTION_CHUNK_KEY,
     DUMB_REWARD_THRESHOLD_KEY,
     ENDPOINT_KEY,
@@ -163,58 +160,6 @@ async def test_predict_accepts_response_without_chunk_id() -> None:
 
     assert pred.chunk_id is None
     assert pred.policy_id == "policy-old"
-
-
-@pytest.mark.asyncio
-async def test_predict_accepts_response_without_context_embeddings() -> None:
-    cfg = serialize_to_msgpack(_server_handshake_payload())
-    resp = serialize_to_msgpack(
-        {
-            ACTION_KEY: np.zeros((4, DEFAULT_HARDWARE_MODEL.action_dim), dtype=np.float32),
-            POLICY_ID_KEY: "policy-1",
-        }
-    )
-    ws_mock = MagicMock()
-    ws_mock.recv = AsyncMock(side_effect=[cfg, resp])
-    ws_mock.send = AsyncMock()
-    ws_mock.close = AsyncMock()
-
-    async def fake_connect(*_a: object, **_kw: object) -> MagicMock:
-        return ws_mock
-
-    with patch("policy_inference_spec.client.websockets.connect", side_effect=fake_connect):
-        client = RemotePolicyClient("ws://127.0.0.1:9/ws")
-        pred = await client.predict(_valid_wire_frame())
-        await client.aclose()
-
-
-
-@pytest.mark.asyncio
-async def test_predict_rejects_context_embeddings_from_stale_frame() -> None:
-    cfg = serialize_to_msgpack(_server_handshake_payload())
-    resp = serialize_to_msgpack(
-        {
-            ACTION_KEY: np.zeros((4, DEFAULT_HARDWARE_MODEL.action_dim), dtype=np.float32),
-            POLICY_ID_KEY: "policy-1",
-        }
-    )
-    ws_mock = MagicMock()
-    ws_mock.recv = AsyncMock(side_effect=[cfg, resp])
-    ws_mock.send = AsyncMock()
-    ws_mock.close = AsyncMock()
-
-    async def fake_connect(*_a: object, **_kw: object) -> MagicMock:
-        return ws_mock
-
-    frame = _valid_wire_frame()
-    frame[CONTEXT_EMBEDDINGS_KEY] = np.ones((CONTEXT_EMBEDDING_TOKENS, CONTEXT_EMBEDDING_WIDTH), dtype=np.float32)
-    with patch("policy_inference_spec.client.websockets.connect", side_effect=fake_connect):
-        client = RemotePolicyClient("ws://127.0.0.1:9/ws")
-        with pytest.raises(AssertionError, match=CONTEXT_EMBEDDINGS_KEY):
-            await client.predict(frame)
-        await client.aclose()
-
-    ws_mock.send.assert_not_called()
 
 
 @pytest.mark.asyncio

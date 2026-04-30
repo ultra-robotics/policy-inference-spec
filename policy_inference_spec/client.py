@@ -283,7 +283,6 @@ class RemotePolicyClient:
         self._record_latency(total_latency_ms=total_latency_ms, server_latency_ms=server_latency_ms)
 
         actions_d = np.array(actions, dtype=np.float32)
-        )
         return RemotePolicyPrediction(
             actions_d=actions_d,
             total_latency_ms=total_latency_ms,

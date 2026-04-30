@@ -8,7 +8,6 @@ from typing import Any, cast
 from policy_inference_spec.client import RemotePolicyClient
 from policy_inference_spec.hardware_model import DEFAULT_HARDWARE_MODEL
 from policy_inference_spec.protocol import (
-    CONTEXT_EMBEDDING_WIDTH,
     JOINT_STATE_KEY,
     MODEL_ID_KEY,
     SUBTASK_KEY,

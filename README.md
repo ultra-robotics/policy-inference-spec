@@ -244,7 +244,6 @@ Optional response fields:
 `RemotePolicyClient.predict()` returns `RemotePolicyPrediction`:
 
 - `actions_d`
-- `context_embeddings` as an empty `(0, CONTEXT_EMBEDDING_WIDTH)` array for servers that follow the current wire spec
 - `total_latency_ms`
 - `policy_id`
 - `chunk_id` (`str | None`; `None` when the server omitted it)
