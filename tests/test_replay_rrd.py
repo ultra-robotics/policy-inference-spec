@@ -49,13 +49,15 @@ async def test_replay_recording_orchestrates_predictions_and_logging(
         sample: object,
         predict_url: str,
         policy_id: str,
-        prompt: str,
+        task: str,
+        subtask: str,
         action_prefix_steps: int,
         prefix_change_start: int,
     ) -> RemotePolicyPrediction:
         assert predict_url == "ws://127.0.0.1:18090/ws"
         assert policy_id == "policy-id"
-        assert prompt == replay_rrd.DEFAULT_PROMPT
+        assert task == replay_rrd.DEFAULT_TASK
+        assert subtask == replay_rrd.DEFAULT_SUBTASK
         assert action_prefix_steps == 6
         assert prefix_change_start == 6
         assert sample in samples
@@ -147,7 +149,8 @@ async def test_main_defaults_prefix_change_start_to_action_prefix_steps(
         output_path: Path,
         predict_url: str,
         policy_id: str,
-        prompt: str,
+        task: str,
+        subtask: str,
         hz: int,
         prediction_hz: float,
         max_samples: int,
@@ -176,7 +179,8 @@ async def test_main_defaults_prefix_change_start_to_action_prefix_steps(
         output_path=output_path,
         predict_url="ws://127.0.0.1:18090/ws",
         policy_id="policy-id",
-        prompt="prompt",
+        task="task",
+        subtask="subtask",
         hz=50,
         prediction_hz=1.0,
         max_samples=1,
@@ -198,7 +202,8 @@ async def test_main_rejects_change_start_after_action_prefix_steps(tmp_path: Pat
             output_path=tmp_path / "output.rrd",
             predict_url="ws://127.0.0.1:18090/ws",
             policy_id="policy-id",
-            prompt="prompt",
+            task="task",
+            subtask="subtask",
             hz=50,
             prediction_hz=1.0,
             max_samples=1,
@@ -277,7 +282,8 @@ async def test_predict_sample_adds_unpadded_action_prefix(monkeypatch: pytest.Mo
         sample,
         "ws://127.0.0.1:18090/ws",
         "policy-id",
-        "task;sub task",
+        "task",
+        "sub task",
         action_prefix_steps=5,
         prefix_change_start=3,
     )
@@ -285,7 +291,7 @@ async def test_predict_sample_adds_unpadded_action_prefix(monkeypatch: pytest.Mo
     request = captured["request"]
     assert isinstance(request, dict)
     assert request[TASK_KEY] == "task"
-    assert request[SUBTASK_KEY] == "sub_task"
+    assert request[SUBTASK_KEY] == "sub task"
     prefix = captured[ACTION_PREFIX_KEY]
     assert isinstance(prefix, np.ndarray)
     assert prefix.shape == (5, feature_bundle.action_dim)
