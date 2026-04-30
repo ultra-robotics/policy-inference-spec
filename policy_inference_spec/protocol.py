@@ -13,9 +13,7 @@ DEFAULT_INFERENCE_SERVER_PORT = 18090
 JOINT_STATE_KEY = "observation/state"
 OBSERVATION_HIDDEN_KEY = "observation/hidden"
 OBSERVATION_ENV_KEY = "observation/env"
-PROMPT_KEY = "prompt"
 ACTION_KEY = "action"
-CONTEXT_EMBEDDINGS_KEY = "context_embeddings"
 INFERENCE_TIME_KEY = "inference_time"
 ENDPOINT_KEY = "endpoint"
 ENDPOINT_RESET = "reset"
@@ -44,8 +42,6 @@ N_EXTERNAL_CAMERAS_KEY = "n_external_cameras"
 SERVER_FEATURES_KEY = "server_features"
 STATUS_KEY = "status"
 ERROR_KEY = "error"
-CONTEXT_EMBEDDING_TOKENS = 2
-CONTEXT_EMBEDDING_WIDTH = 128
 
 InferenceMetadataValue: TypeAlias = str | int | float | bool | list[str] | list[int] | list[float]
 ImageArray: TypeAlias = npt.NDArray[np.uint8]
@@ -206,9 +202,6 @@ __all__ = [
     "ACTION_SPACE_KEY",
     "CAMERA_NAMES_KEY",
     "CHUNK_ID_KEY",
-    "CONTEXT_EMBEDDINGS_KEY",
-    "CONTEXT_EMBEDDING_TOKENS",
-    "CONTEXT_EMBEDDING_WIDTH",
     "DEFAULT_INFERENCE_SERVER_PORT",
     "DUMB_REWARD_GOAL_ACTION_CHUNK_KEY",
     "DUMB_REWARD_THRESHOLD_KEY",
@@ -232,7 +225,6 @@ __all__ = [
     "NEEDS_WRIST_CAMERA_KEY",
     "POLICY_ID_KEY",
     "PREFIX_CHANGE_START_KEY",
-    "PROMPT_KEY",
     "ProtocolPayload",
     "ProtocolValue",
     "REWARD_DESCRIPTION_KEY",

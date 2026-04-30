@@ -25,9 +25,6 @@ from policy_inference_spec.protocol import (
     ACTION_KEY,
     ACTION_PREFIX_KEY,
     CHUNK_ID_KEY,
-    CONTEXT_EMBEDDINGS_KEY,
-    CONTEXT_EMBEDDING_TOKENS,
-    CONTEXT_EMBEDDING_WIDTH,
     DUMB_REWARD_GOAL_ACTION_CHUNK_KEY,
     DUMB_REWARD_THRESHOLD_KEY,
     ENDPOINT_KEY,
@@ -106,12 +103,9 @@ def test_default_predict_url_is_ws() -> None:
 async def test_predict_round_trip_with_mock_websocket() -> None:
     cfg = serialize_to_msgpack(_server_handshake_payload())
     actions = np.zeros((4, DEFAULT_HARDWARE_MODEL.action_dim), dtype=np.float32)
-    context_embeddings = np.zeros((CONTEXT_EMBEDDING_TOKENS, CONTEXT_EMBEDDING_WIDTH), dtype=np.float32)
-    context_embeddings[-1, -1] = 1.0
     resp = serialize_to_msgpack(
         {
             ACTION_KEY: actions,
-            CONTEXT_EMBEDDINGS_KEY: context_embeddings,
             INFERENCE_TIME_KEY: 3.5,
             POLICY_ID_KEY: "policy-1",
             CHUNK_ID_KEY: "chunk-xyz",
@@ -135,8 +129,6 @@ async def test_predict_round_trip_with_mock_websocket() -> None:
     assert pred.chunk_id == "chunk-xyz"
     assert pred.actions_d.shape == (4, DEFAULT_HARDWARE_MODEL.action_dim)
     assert pred.actions_d.dtype == np.float32
-    assert pred.context_embeddings.shape == (CONTEXT_EMBEDDING_TOKENS, CONTEXT_EMBEDDING_WIDTH)
-    assert pred.context_embeddings.dtype == np.float32
     assert pred.total_latency_ms >= 0.0
     ws_mock.send.assert_called_once()
     assert ws_mock.recv.call_count == 2
@@ -146,11 +138,9 @@ async def test_predict_round_trip_with_mock_websocket() -> None:
 async def test_predict_accepts_response_without_chunk_id() -> None:
     cfg = serialize_to_msgpack(_server_handshake_payload())
     actions = np.zeros((4, DEFAULT_HARDWARE_MODEL.action_dim), dtype=np.float32)
-    context_embeddings = np.zeros((CONTEXT_EMBEDDING_TOKENS, CONTEXT_EMBEDDING_WIDTH), dtype=np.float32)
     resp = serialize_to_msgpack(
         {
             ACTION_KEY: actions,
-            CONTEXT_EMBEDDINGS_KEY: context_embeddings,
             POLICY_ID_KEY: "policy-old",
         }
     )
@@ -178,7 +168,6 @@ async def test_predict_preserves_optional_dumb_reward_goal_chunk_and_threshold()
     resp = serialize_to_msgpack(
         {
             ACTION_KEY: np.zeros((1, DEFAULT_HARDWARE_MODEL.action_dim), dtype=np.float32),
-            CONTEXT_EMBEDDINGS_KEY: np.zeros((CONTEXT_EMBEDDING_TOKENS, CONTEXT_EMBEDDING_WIDTH), dtype=np.float32),
             POLICY_ID_KEY: "policy-1",
         }
     )
@@ -215,7 +204,6 @@ async def test_predict_preserves_optional_action_prefix_and_prefix_change_start(
     resp = serialize_to_msgpack(
         {
             ACTION_KEY: np.zeros((1, DEFAULT_HARDWARE_MODEL.action_dim), dtype=np.float32),
-            CONTEXT_EMBEDDINGS_KEY: np.zeros((CONTEXT_EMBEDDING_TOKENS, CONTEXT_EMBEDDING_WIDTH), dtype=np.float32),
             POLICY_ID_KEY: "policy-1",
         }
     )
@@ -246,11 +234,9 @@ async def test_predict_preserves_optional_action_prefix_and_prefix_change_start(
 @pytest.mark.asyncio
 async def test_predict_jpeg_encodes_ndarray_images_without_resizing() -> None:
     cfg = serialize_to_msgpack(_server_handshake_payload_with_resolution())
-    context_embeddings = np.zeros((CONTEXT_EMBEDDING_TOKENS, CONTEXT_EMBEDDING_WIDTH), dtype=np.float32)
     resp = serialize_to_msgpack(
         {
             ACTION_KEY: np.zeros((1, DEFAULT_HARDWARE_MODEL.action_dim), dtype=np.float32),
-            CONTEXT_EMBEDDINGS_KEY: context_embeddings,
             INFERENCE_TIME_KEY: 1.0,
             POLICY_ID_KEY: "policy-1",
         }
@@ -295,11 +281,9 @@ async def test_predict_jpeg_encodes_ndarray_images_without_resizing() -> None:
 async def test_predict_rejects_invalid_response() -> None:
     cfg = serialize_to_msgpack(_server_handshake_payload())
     bad_actions = np.zeros((1, 7), dtype=np.float32)
-    context_embeddings = np.zeros((CONTEXT_EMBEDDING_TOKENS, CONTEXT_EMBEDDING_WIDTH), dtype=np.float32)
     resp = serialize_to_msgpack(
         {
             ACTION_KEY: bad_actions,
-            CONTEXT_EMBEDDINGS_KEY: context_embeddings,
             INFERENCE_TIME_KEY: 1.0,
             POLICY_ID_KEY: "",
         }

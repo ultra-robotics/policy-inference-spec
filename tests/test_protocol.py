@@ -12,9 +12,6 @@ from policy_inference_spec.codec import NdarrayField, deserialize_from_msgpack, 
 from policy_inference_spec.protocol import (
     ACTION_KEY,
     CHUNK_ID_KEY,
-    CONTEXT_EMBEDDINGS_KEY,
-    CONTEXT_EMBEDDING_TOKENS,
-    CONTEXT_EMBEDDING_WIDTH,
     DUMB_REWARD_GOAL_ACTION_CHUNK_KEY,
     DUMB_REWARD_THRESHOLD_KEY,
     ENDPOINT_KEY,
@@ -92,7 +89,6 @@ def test_validate_wire_inference_response_summarizes_binary_like_payloads() -> N
                     "dtype": "float64",
                     "shape": [2, 2],
                 },
-                CONTEXT_EMBEDDINGS_KEY: np.zeros((CONTEXT_EMBEDDING_TOKENS, CONTEXT_EMBEDDING_WIDTH), dtype=np.float32),
             }
         )
 
@@ -102,26 +98,10 @@ def test_validate_wire_inference_response_summarizes_binary_like_payloads() -> N
     assert "\\x00" not in message
 
 
-def test_validate_wire_inference_response_accepts_context_embeddings() -> None:
-    validate_wire_inference_response(
-        {
-            ACTION_KEY: np.zeros((2, 25), dtype=np.float32),
-            CONTEXT_EMBEDDINGS_KEY: np.zeros(
-                (CONTEXT_EMBEDDING_TOKENS, CONTEXT_EMBEDDING_WIDTH),
-                dtype=np.float32,
-            ),
-        }
-    )
-
-
 def test_validate_wire_inference_response_accepts_optional_chunk_id() -> None:
     validate_wire_inference_response(
         {
             ACTION_KEY: np.zeros((2, 25), dtype=np.float32),
-            CONTEXT_EMBEDDINGS_KEY: np.zeros(
-                (CONTEXT_EMBEDDING_TOKENS, CONTEXT_EMBEDDING_WIDTH),
-                dtype=np.float32,
-            ),
             CHUNK_ID_KEY: "abc123",
         }
     )
@@ -132,10 +112,6 @@ def test_validate_wire_inference_response_rejects_empty_chunk_id() -> None:
         validate_wire_inference_response(
             {
                 ACTION_KEY: np.zeros((2, 25), dtype=np.float32),
-                CONTEXT_EMBEDDINGS_KEY: np.zeros(
-                    (CONTEXT_EMBEDDING_TOKENS, CONTEXT_EMBEDDING_WIDTH),
-                    dtype=np.float32,
-                ),
                 CHUNK_ID_KEY: "",
             }
         )

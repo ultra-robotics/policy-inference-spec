@@ -234,7 +234,6 @@ Optional request fields:
 `validate_wire_inference_response()` requires:
 
 - `action`: a 2-D floating `numpy.ndarray` whose second dimension is `25`
-- `context_embeddings`: a floating `numpy.ndarray` with shape `(2, 128)`
 
 Optional response fields:
 
@@ -245,7 +244,6 @@ Optional response fields:
 `RemotePolicyClient.predict()` returns `RemotePolicyPrediction`:
 
 - `actions_d`
-- `context_embeddings`
 - `total_latency_ms`
 - `policy_id`
 - `chunk_id` (`str | None`; `None` when the server omitted it)

@@ -12,9 +12,6 @@ from policy_inference_spec.protocol import (
     ACTION_KEY,
     ACTION_PREFIX_KEY,
     CHUNK_ID_KEY,
-    CONTEXT_EMBEDDING_TOKENS,
-    CONTEXT_EMBEDDING_WIDTH,
-    CONTEXT_EMBEDDINGS_KEY,
     DUMB_REWARD_GOAL_ACTION_CHUNK_KEY,
     DUMB_REWARD_THRESHOLD_KEY,
     ENDPOINT_KEY,
@@ -132,8 +129,6 @@ def _wire_inference_request_keys(*, hardware_model: HardwareModel = DEFAULT_HARD
         {
             JOINT_STATE_KEY,
             *_observation_keys(hardware_model),
-            TASK_KEY,
-            SUBTASK_KEY,
             MODEL_ID_KEY,
         }
     )
@@ -150,6 +145,8 @@ def _optional_wire_inference_request_keys() -> frozenset[str]:
             PREFIX_CHANGE_START_KEY,
             OBSERVATION_ENV_KEY,
             OBSERVATION_HIDDEN_KEY,
+            TASK_KEY,
+            SUBTASK_KEY,
         }
     )
 
@@ -200,8 +197,12 @@ def validate_wire_inference_request_frame(
     allowed = required | _optional_wire_inference_request_keys()
     keys = set(frame.keys())
     assert required <= keys <= allowed, f"wire inference keys {keys} must include {required} and stay within {allowed}"
+    
     assert isinstance(frame[TASK_KEY], str), f"{TASK_KEY} must be str"
     assert isinstance(frame[SUBTASK_KEY], str), f"{SUBTASK_KEY} must be str"
+    has_task = TASK_KEY != ""
+    has_subtask = SUBTASK_KEY != ""
+    assert has_task == has_subtask, f"{TASK_KEY} and {SUBTASK_KEY} may either both take on values, or neither may have a value"
     assert isinstance(frame[MODEL_ID_KEY], str), f"{MODEL_ID_KEY} must be str"
     fast_mock_action_dim_raw = frame.get(FAST_MOCK_ACTION_DIM_KEY)
     fast_mock_action_horizon_raw = frame.get(FAST_MOCK_ACTION_HORIZON_KEY)
@@ -296,12 +297,11 @@ def validate_wire_inference_response(
 ) -> None:
     response_summary = _summarize_response_payload(result)
     assert "error" not in result, f"unexpected error payload: {response_summary}"
-    allowed = frozenset({ACTION_KEY, CHUNK_ID_KEY, CONTEXT_EMBEDDINGS_KEY, INFERENCE_TIME_KEY, POLICY_ID_KEY})
+    allowed = frozenset({ACTION_KEY, CHUNK_ID_KEY, INFERENCE_TIME_KEY, POLICY_ID_KEY})
     assert set(result.keys()) <= allowed, (
         f"response keys {set(result.keys())} not subset of {allowed}; summary={response_summary}"
     )
     assert ACTION_KEY in result, f"response missing action; summary={response_summary}"
-    assert CONTEXT_EMBEDDINGS_KEY in result, f"response missing {CONTEXT_EMBEDDINGS_KEY}; summary={response_summary}"
     actions = result[ACTION_KEY]
     assert isinstance(actions, np.ndarray), f"action must be ndarray, got {type(actions)}; summary={response_summary}"
     assert actions.ndim == 2, f"action must be 2-D, got shape {actions.shape}"
@@ -309,17 +309,6 @@ def validate_wire_inference_response(
         f"action second dim must be {hardware_model.action_dim}, got {actions.shape}"
     )
     assert np.issubdtype(actions.dtype, np.floating), f"action must be floating ndarray, got {actions.dtype}"
-    context_embeddings = result[CONTEXT_EMBEDDINGS_KEY]
-    assert isinstance(context_embeddings, np.ndarray), (
-        f"{CONTEXT_EMBEDDINGS_KEY} must be ndarray, got {type(context_embeddings)}; summary={response_summary}"
-    )
-    assert context_embeddings.shape == (CONTEXT_EMBEDDING_TOKENS, CONTEXT_EMBEDDING_WIDTH), (
-        f"{CONTEXT_EMBEDDINGS_KEY} must have shape {(CONTEXT_EMBEDDING_TOKENS, CONTEXT_EMBEDDING_WIDTH)}, "
-        f"got {context_embeddings.shape}"
-    )
-    assert np.issubdtype(context_embeddings.dtype, np.floating), (
-        f"{CONTEXT_EMBEDDINGS_KEY} must be floating ndarray, got {context_embeddings.dtype}"
-    )
     if INFERENCE_TIME_KEY in result:
         assert isinstance(result[INFERENCE_TIME_KEY], (int, float)), "inference_time must be numeric"
     if POLICY_ID_KEY in result:

@@ -22,9 +22,6 @@ from policy_inference_spec.hardware_model import (
 from policy_inference_spec.protocol import (
     ACTION_KEY,
     CHUNK_ID_KEY,
-    CONTEXT_EMBEDDINGS_KEY,
-    CONTEXT_EMBEDDING_TOKENS,
-    CONTEXT_EMBEDDING_WIDTH,
     DEFAULT_INFERENCE_SERVER_PORT,
     ENDPOINT_KEY,
     ENDPOINT_RESET,
@@ -103,15 +100,9 @@ def _inference_response(
     joint_position = frame[JOINT_STATE_KEY]
     assert isinstance(joint_position, np.ndarray), type(joint_position)
     actions = example_policy_actions(joint_position, horizon=action_horizon)
-    context_embeddings = np.zeros(
-        (CONTEXT_EMBEDDING_TOKENS, CONTEXT_EMBEDDING_WIDTH),
-        dtype=np.float32,
-    )
-    context_embeddings[-1, -1] = 1.0
     resp = {
         ACTION_KEY: actions,
         CHUNK_ID_KEY: uuid.uuid4().hex[:12],
-        CONTEXT_EMBEDDINGS_KEY: context_embeddings,
         INFERENCE_TIME_KEY: 0.25,
         POLICY_ID_KEY: EXAMPLE_POLICY_ID,
     }
