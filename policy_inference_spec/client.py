@@ -24,6 +24,7 @@ from policy_inference_spec.protocol import (
     ACTION_KEY,
     CHUNK_ID_KEY,
     ACTION_PREFIX_KEY,
+    CONTEXT_EMBEDDING_WIDTH,
     CONTEXT_EMBEDDINGS_KEY,
     ENDPOINT_KEY,
     ENDPOINT_REWARD,
@@ -123,7 +124,7 @@ class RemotePolicyClient:
             )
 
     def _encode_wire_frame_images(self, wire_frame: dict[str, Any]) -> dict[str, Any]:
-        adapted = dict(wire_frame)
+        adapted = {key: value for key, value in wire_frame.items() if key != CONTEXT_EMBEDDINGS_KEY}
         for key, value in wire_frame.items():
             if not key.startswith("observation/") or key == JOINT_STATE_KEY:
                 continue
@@ -285,7 +286,12 @@ class RemotePolicyClient:
         self._record_latency(total_latency_ms=total_latency_ms, server_latency_ms=server_latency_ms)
 
         actions_d = np.array(actions, dtype=np.float32)
-        context_embeddings = np.array(result[CONTEXT_EMBEDDINGS_KEY], dtype=np.float32)
+        context_embeddings_raw = result.get(CONTEXT_EMBEDDINGS_KEY)
+        context_embeddings = (
+            np.zeros((0, CONTEXT_EMBEDDING_WIDTH), dtype=np.float32)
+            if context_embeddings_raw is None
+            else np.array(context_embeddings_raw, dtype=np.float32)
+        )
         return RemotePolicyPrediction(
             actions_d=actions_d,
             context_embeddings=context_embeddings,

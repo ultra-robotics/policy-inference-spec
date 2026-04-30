@@ -173,6 +173,62 @@ async def test_predict_accepts_response_without_chunk_id() -> None:
 
 
 @pytest.mark.asyncio
+async def test_predict_accepts_response_without_context_embeddings() -> None:
+    cfg = serialize_to_msgpack(_server_handshake_payload())
+    resp = serialize_to_msgpack(
+        {
+            ACTION_KEY: np.zeros((4, DEFAULT_HARDWARE_MODEL.action_dim), dtype=np.float32),
+            POLICY_ID_KEY: "policy-1",
+        }
+    )
+    ws_mock = MagicMock()
+    ws_mock.recv = AsyncMock(side_effect=[cfg, resp])
+    ws_mock.send = AsyncMock()
+    ws_mock.close = AsyncMock()
+
+    async def fake_connect(*_a: object, **_kw: object) -> MagicMock:
+        return ws_mock
+
+    with patch("policy_inference_spec.client.websockets.connect", side_effect=fake_connect):
+        client = RemotePolicyClient("ws://127.0.0.1:9/ws")
+        pred = await client.predict(_valid_wire_frame())
+        await client.aclose()
+
+    assert pred.context_embeddings.shape == (0, CONTEXT_EMBEDDING_WIDTH)
+    assert pred.context_embeddings.dtype == np.float32
+
+
+@pytest.mark.asyncio
+async def test_predict_does_not_send_context_embeddings_from_stale_frame() -> None:
+    cfg = serialize_to_msgpack(_server_handshake_payload())
+    resp = serialize_to_msgpack(
+        {
+            ACTION_KEY: np.zeros((4, DEFAULT_HARDWARE_MODEL.action_dim), dtype=np.float32),
+            POLICY_ID_KEY: "policy-1",
+        }
+    )
+    ws_mock = MagicMock()
+    ws_mock.recv = AsyncMock(side_effect=[cfg, resp])
+    ws_mock.send = AsyncMock()
+    ws_mock.close = AsyncMock()
+
+    async def fake_connect(*_a: object, **_kw: object) -> MagicMock:
+        return ws_mock
+
+    frame = _valid_wire_frame()
+    frame[CONTEXT_EMBEDDINGS_KEY] = np.ones((CONTEXT_EMBEDDING_TOKENS, CONTEXT_EMBEDDING_WIDTH), dtype=np.float32)
+    with patch("policy_inference_spec.client.websockets.connect", side_effect=fake_connect):
+        client = RemotePolicyClient("ws://127.0.0.1:9/ws")
+        await client.predict(frame)
+        await client.aclose()
+
+    await_args = ws_mock.send.await_args
+    assert await_args is not None
+    sent_payload = deserialize_from_msgpack(await_args.args[0])
+    assert CONTEXT_EMBEDDINGS_KEY not in sent_payload
+
+
+@pytest.mark.asyncio
 async def test_predict_preserves_optional_dumb_reward_goal_chunk_and_threshold() -> None:
     cfg = serialize_to_msgpack(_server_handshake_payload())
     resp = serialize_to_msgpack(

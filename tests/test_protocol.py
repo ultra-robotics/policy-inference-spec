@@ -114,6 +114,14 @@ def test_validate_wire_inference_response_accepts_context_embeddings() -> None:
     )
 
 
+def test_validate_wire_inference_response_accepts_missing_context_embeddings() -> None:
+    validate_wire_inference_response(
+        {
+            ACTION_KEY: np.zeros((2, 25), dtype=np.float32),
+        }
+    )
+
+
 def test_validate_wire_inference_response_accepts_optional_chunk_id() -> None:
     validate_wire_inference_response(
         {
