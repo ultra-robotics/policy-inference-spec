@@ -24,8 +24,6 @@ from policy_inference_spec.protocol import (
     ACTION_KEY,
     CHUNK_ID_KEY,
     ACTION_PREFIX_KEY,
-    CONTEXT_EMBEDDING_WIDTH,
-    CONTEXT_EMBEDDINGS_KEY,
     ENDPOINT_KEY,
     ENDPOINT_REWARD,
     INFERENCE_TIME_KEY,

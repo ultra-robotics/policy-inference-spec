@@ -14,7 +14,6 @@ JOINT_STATE_KEY = "observation/state"
 OBSERVATION_HIDDEN_KEY = "observation/hidden"
 OBSERVATION_ENV_KEY = "observation/env"
 ACTION_KEY = "action"
-CONTEXT_EMBEDDINGS_KEY = "context_embeddings"
 INFERENCE_TIME_KEY = "inference_time"
 ENDPOINT_KEY = "endpoint"
 ENDPOINT_RESET = "reset"
@@ -43,8 +42,6 @@ N_EXTERNAL_CAMERAS_KEY = "n_external_cameras"
 SERVER_FEATURES_KEY = "server_features"
 STATUS_KEY = "status"
 ERROR_KEY = "error"
-CONTEXT_EMBEDDING_TOKENS = 2
-CONTEXT_EMBEDDING_WIDTH = 2560
 
 InferenceMetadataValue: TypeAlias = str | int | float | bool | list[str] | list[int] | list[float]
 ImageArray: TypeAlias = npt.NDArray[np.uint8]
