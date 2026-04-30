@@ -102,16 +102,17 @@ def test_validate_wire_inference_response_summarizes_binary_like_payloads() -> N
     assert "\\x00" not in message
 
 
-def test_validate_wire_inference_response_accepts_context_embeddings() -> None:
-    validate_wire_inference_response(
-        {
-            ACTION_KEY: np.zeros((2, 25), dtype=np.float32),
-            CONTEXT_EMBEDDINGS_KEY: np.zeros(
-                (CONTEXT_EMBEDDING_TOKENS, CONTEXT_EMBEDDING_WIDTH),
-                dtype=np.float32,
-            ),
-        }
-    )
+def test_validate_wire_inference_response_rejects_context_embeddings() -> None:
+    with pytest.raises(AssertionError, match=CONTEXT_EMBEDDINGS_KEY):
+        validate_wire_inference_response(
+            {
+                ACTION_KEY: np.zeros((2, 25), dtype=np.float32),
+                CONTEXT_EMBEDDINGS_KEY: np.zeros(
+                    (CONTEXT_EMBEDDING_TOKENS, CONTEXT_EMBEDDING_WIDTH),
+                    dtype=np.float32,
+                ),
+            }
+        )
 
 
 def test_validate_wire_inference_response_accepts_missing_context_embeddings() -> None:
@@ -126,10 +127,6 @@ def test_validate_wire_inference_response_accepts_optional_chunk_id() -> None:
     validate_wire_inference_response(
         {
             ACTION_KEY: np.zeros((2, 25), dtype=np.float32),
-            CONTEXT_EMBEDDINGS_KEY: np.zeros(
-                (CONTEXT_EMBEDDING_TOKENS, CONTEXT_EMBEDDING_WIDTH),
-                dtype=np.float32,
-            ),
             CHUNK_ID_KEY: "abc123",
         }
     )
@@ -140,10 +137,6 @@ def test_validate_wire_inference_response_rejects_empty_chunk_id() -> None:
         validate_wire_inference_response(
             {
                 ACTION_KEY: np.zeros((2, 25), dtype=np.float32),
-                CONTEXT_EMBEDDINGS_KEY: np.zeros(
-                    (CONTEXT_EMBEDDING_TOKENS, CONTEXT_EMBEDDING_WIDTH),
-                    dtype=np.float32,
-                ),
                 CHUNK_ID_KEY: "",
             }
         )

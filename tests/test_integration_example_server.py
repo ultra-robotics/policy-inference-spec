@@ -8,8 +8,6 @@ from typing import Any, cast
 from policy_inference_spec.client import RemotePolicyClient
 from policy_inference_spec.hardware_model import DEFAULT_HARDWARE_MODEL
 from policy_inference_spec.protocol import (
-    CONTEXT_EMBEDDINGS_KEY,
-    CONTEXT_EMBEDDING_TOKENS,
     CONTEXT_EMBEDDING_WIDTH,
     JOINT_STATE_KEY,
     MODEL_ID_KEY,
@@ -55,9 +53,8 @@ async def test_client_predict_against_example_server() -> None:
     expected = example_policy_actions(cast(np.ndarray[Any, Any], frame[JOINT_STATE_KEY]))
     assert pred.actions_d.shape == expected.shape
     assert pred.actions_d.dtype == np.float32
-    assert pred.context_embeddings.shape == (CONTEXT_EMBEDDING_TOKENS, CONTEXT_EMBEDDING_WIDTH)
+    assert pred.context_embeddings.shape == (0, CONTEXT_EMBEDDING_WIDTH)
     assert isinstance(pred.context_embeddings, np.ndarray)
-    assert np.array_equal(pred.context_embeddings[-1], np.eye(CONTEXT_EMBEDDING_WIDTH, dtype=np.float32)[-1])
     assert np.allclose(pred.actions_d, expected)
     assert pred.policy_id == EXAMPLE_POLICY_ID
     assert isinstance(pred.chunk_id, str) and pred.chunk_id

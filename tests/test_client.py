@@ -106,12 +106,9 @@ def test_default_predict_url_is_ws() -> None:
 async def test_predict_round_trip_with_mock_websocket() -> None:
     cfg = serialize_to_msgpack(_server_handshake_payload())
     actions = np.zeros((4, DEFAULT_HARDWARE_MODEL.action_dim), dtype=np.float32)
-    context_embeddings = np.zeros((CONTEXT_EMBEDDING_TOKENS, CONTEXT_EMBEDDING_WIDTH), dtype=np.float32)
-    context_embeddings[-1, -1] = 1.0
     resp = serialize_to_msgpack(
         {
             ACTION_KEY: actions,
-            CONTEXT_EMBEDDINGS_KEY: context_embeddings,
             INFERENCE_TIME_KEY: 3.5,
             POLICY_ID_KEY: "policy-1",
             CHUNK_ID_KEY: "chunk-xyz",
@@ -135,7 +132,7 @@ async def test_predict_round_trip_with_mock_websocket() -> None:
     assert pred.chunk_id == "chunk-xyz"
     assert pred.actions_d.shape == (4, DEFAULT_HARDWARE_MODEL.action_dim)
     assert pred.actions_d.dtype == np.float32
-    assert pred.context_embeddings.shape == (CONTEXT_EMBEDDING_TOKENS, CONTEXT_EMBEDDING_WIDTH)
+    assert pred.context_embeddings.shape == (0, CONTEXT_EMBEDDING_WIDTH)
     assert pred.context_embeddings.dtype == np.float32
     assert pred.total_latency_ms >= 0.0
     ws_mock.send.assert_called_once()
@@ -146,11 +143,9 @@ async def test_predict_round_trip_with_mock_websocket() -> None:
 async def test_predict_accepts_response_without_chunk_id() -> None:
     cfg = serialize_to_msgpack(_server_handshake_payload())
     actions = np.zeros((4, DEFAULT_HARDWARE_MODEL.action_dim), dtype=np.float32)
-    context_embeddings = np.zeros((CONTEXT_EMBEDDING_TOKENS, CONTEXT_EMBEDDING_WIDTH), dtype=np.float32)
     resp = serialize_to_msgpack(
         {
             ACTION_KEY: actions,
-            CONTEXT_EMBEDDINGS_KEY: context_embeddings,
             POLICY_ID_KEY: "policy-old",
         }
     )
@@ -199,7 +194,7 @@ async def test_predict_accepts_response_without_context_embeddings() -> None:
 
 
 @pytest.mark.asyncio
-async def test_predict_does_not_send_context_embeddings_from_stale_frame() -> None:
+async def test_predict_rejects_context_embeddings_from_stale_frame() -> None:
     cfg = serialize_to_msgpack(_server_handshake_payload())
     resp = serialize_to_msgpack(
         {
@@ -219,13 +214,11 @@ async def test_predict_does_not_send_context_embeddings_from_stale_frame() -> No
     frame[CONTEXT_EMBEDDINGS_KEY] = np.ones((CONTEXT_EMBEDDING_TOKENS, CONTEXT_EMBEDDING_WIDTH), dtype=np.float32)
     with patch("policy_inference_spec.client.websockets.connect", side_effect=fake_connect):
         client = RemotePolicyClient("ws://127.0.0.1:9/ws")
-        await client.predict(frame)
+        with pytest.raises(AssertionError, match=CONTEXT_EMBEDDINGS_KEY):
+            await client.predict(frame)
         await client.aclose()
 
-    await_args = ws_mock.send.await_args
-    assert await_args is not None
-    sent_payload = deserialize_from_msgpack(await_args.args[0])
-    assert CONTEXT_EMBEDDINGS_KEY not in sent_payload
+    ws_mock.send.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -234,7 +227,6 @@ async def test_predict_preserves_optional_dumb_reward_goal_chunk_and_threshold()
     resp = serialize_to_msgpack(
         {
             ACTION_KEY: np.zeros((1, DEFAULT_HARDWARE_MODEL.action_dim), dtype=np.float32),
-            CONTEXT_EMBEDDINGS_KEY: np.zeros((CONTEXT_EMBEDDING_TOKENS, CONTEXT_EMBEDDING_WIDTH), dtype=np.float32),
             POLICY_ID_KEY: "policy-1",
         }
     )
@@ -271,7 +263,6 @@ async def test_predict_preserves_optional_action_prefix_and_prefix_change_start(
     resp = serialize_to_msgpack(
         {
             ACTION_KEY: np.zeros((1, DEFAULT_HARDWARE_MODEL.action_dim), dtype=np.float32),
-            CONTEXT_EMBEDDINGS_KEY: np.zeros((CONTEXT_EMBEDDING_TOKENS, CONTEXT_EMBEDDING_WIDTH), dtype=np.float32),
             POLICY_ID_KEY: "policy-1",
         }
     )
@@ -302,11 +293,9 @@ async def test_predict_preserves_optional_action_prefix_and_prefix_change_start(
 @pytest.mark.asyncio
 async def test_predict_jpeg_encodes_ndarray_images_without_resizing() -> None:
     cfg = serialize_to_msgpack(_server_handshake_payload_with_resolution())
-    context_embeddings = np.zeros((CONTEXT_EMBEDDING_TOKENS, CONTEXT_EMBEDDING_WIDTH), dtype=np.float32)
     resp = serialize_to_msgpack(
         {
             ACTION_KEY: np.zeros((1, DEFAULT_HARDWARE_MODEL.action_dim), dtype=np.float32),
-            CONTEXT_EMBEDDINGS_KEY: context_embeddings,
             INFERENCE_TIME_KEY: 1.0,
             POLICY_ID_KEY: "policy-1",
         }
@@ -351,11 +340,9 @@ async def test_predict_jpeg_encodes_ndarray_images_without_resizing() -> None:
 async def test_predict_rejects_invalid_response() -> None:
     cfg = serialize_to_msgpack(_server_handshake_payload())
     bad_actions = np.zeros((1, 7), dtype=np.float32)
-    context_embeddings = np.zeros((CONTEXT_EMBEDDING_TOKENS, CONTEXT_EMBEDDING_WIDTH), dtype=np.float32)
     resp = serialize_to_msgpack(
         {
             ACTION_KEY: bad_actions,
-            CONTEXT_EMBEDDINGS_KEY: context_embeddings,
             INFERENCE_TIME_KEY: 1.0,
             POLICY_ID_KEY: "",
         }

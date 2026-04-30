@@ -124,7 +124,7 @@ class RemotePolicyClient:
             )
 
     def _encode_wire_frame_images(self, wire_frame: dict[str, Any]) -> dict[str, Any]:
-        adapted = {key: value for key, value in wire_frame.items() if key != CONTEXT_EMBEDDINGS_KEY}
+        adapted = dict(wire_frame)
         for key, value in wire_frame.items():
             if not key.startswith("observation/") or key == JOINT_STATE_KEY:
                 continue
