@@ -33,6 +33,8 @@ PREFIX_CHANGE_START_KEY = "prefix_change_start"
 REWARD_DESCRIPTION_KEY = "description"
 CHUNK_ID_KEY = "chunk_id"
 DONE_KEY = "done"
+TASK_KEY = "task"
+SUBTASK_KEY = "subtask"
 
 CAMERA_NAMES_KEY = "camera_names"
 IMAGE_RESOLUTION_KEY = "image_resolution"
@@ -238,6 +240,8 @@ __all__ = [
     "RewardSignal",
     "SERVER_FEATURES_KEY",
     "STATUS_KEY",
+    "SUBTASK_KEY",
+    "TASK_KEY",
     "ServerFeature",
     "ServerHandshake",
     "make_server_handshake",

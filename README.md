@@ -200,13 +200,15 @@ Only `HardwareModel.GEN2` is modeled in this package.
 - `observation/images/main_image`
 - `observation/images/left_wrist_image`
 - `observation/images/right_wrist_image`
-- `prompt`
+- `task`
+- `subtask`
 - `model_id`
 
 Current validation rules:
 
 - `endpoint` must not be present on inference frames.
-- `prompt` must be `str`.
+- `task` must be `str`.
+- `subtask` must be `str`.
 - `model_id` must be `str`.
 - `observation/state` must be a 1-D `numpy.ndarray` with shape `(97,)`.
 - Each image field must be either JPEG `bytes` or a `numpy.ndarray`.

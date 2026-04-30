@@ -11,7 +11,7 @@ import pytest
 import policy_inference_spec.replay_rrd as replay_rrd
 from policy_inference_spec.client import RemotePolicyPrediction
 from policy_inference_spec.feature_engineering import FeatureBundle, ScalarFeature, SchemaName, VideoFeature
-from policy_inference_spec.protocol import ACTION_PREFIX_KEY, PREFIX_CHANGE_START_KEY
+from policy_inference_spec.protocol import ACTION_PREFIX_KEY, PREFIX_CHANGE_START_KEY, SUBTASK_KEY, TASK_KEY
 
 
 @pytest.mark.asyncio
@@ -131,6 +131,7 @@ async def test_replay_recording_requires_samples(monkeypatch: pytest.MonkeyPatch
         await replay_rrd.replay_recording(recording_path=recording_path, output_path=tmp_path / "output.rrd")
 
 
+@pytest.mark.asyncio
 async def test_main_defaults_prefix_change_start_to_action_prefix_steps(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -184,6 +185,7 @@ async def test_main_defaults_prefix_change_start_to_action_prefix_steps(
     )
 
 
+@pytest.mark.asyncio
 async def test_main_rejects_change_start_after_action_prefix_steps(tmp_path: Path) -> None:
     recording_path = tmp_path / "input.rrd"
     recording_path.write_bytes(b"rrd")
@@ -205,6 +207,7 @@ async def test_main_rejects_change_start_after_action_prefix_steps(tmp_path: Pat
         )
 
 
+@pytest.mark.asyncio
 async def test_predict_sample_adds_unpadded_action_prefix(monkeypatch: pytest.MonkeyPatch) -> None:
     feature_bundle = FeatureBundle(
         name="test",
@@ -274,13 +277,15 @@ async def test_predict_sample_adds_unpadded_action_prefix(monkeypatch: pytest.Mo
         sample,
         "ws://127.0.0.1:18090/ws",
         "policy-id",
-        "prompt",
+        "task;sub task",
         action_prefix_steps=5,
         prefix_change_start=3,
     )
 
     request = captured["request"]
     assert isinstance(request, dict)
+    assert request[TASK_KEY] == "task"
+    assert request[SUBTASK_KEY] == "sub_task"
     prefix = captured[ACTION_PREFIX_KEY]
     assert isinstance(prefix, np.ndarray)
     assert prefix.shape == (5, feature_bundle.action_dim)

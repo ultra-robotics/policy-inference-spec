@@ -29,7 +29,8 @@ from policy_inference_spec.protocol import (
     JOINT_STATE_KEY,
     MODEL_ID_KEY,
     PREFIX_CHANGE_START_KEY,
-    PROMPT_KEY,
+    SUBTASK_KEY,
+    TASK_KEY,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -197,6 +198,16 @@ def _action_prefix_payload(
     }
 
 
+def _task_subtask_from_prompt(prompt: str) -> tuple[str, str]:
+    task, separator, subtask = prompt.partition(";")
+    assert separator == ";", f"prompt must have format 'task;subtask', got {prompt!r}"
+    task = task.strip()
+    subtask = subtask.strip().replace(" ", "_")
+    assert task, f"prompt task cannot be empty: {prompt!r}"
+    assert subtask, f"prompt subtask cannot be empty: {prompt!r}"
+    return task, subtask
+
+
 async def predict_sample(
     feature_bundle: FeatureBundle,
     sample: dict[str, np.ndarray | pd.Timestamp],
@@ -213,11 +224,13 @@ async def predict_sample(
         assert isinstance(value, np.ndarray), f"Expected ndarray for {key}, got {type(value)}"
         arrays[key] = value
     processed_sample = feature_bundle.preprocess(arrays)
+    task, subtask = _task_subtask_from_prompt(prompt)
     async with RemotePolicyClient(predict_url) as inference_client:
         return await inference_client.predict(
             {
                 JOINT_STATE_KEY: processed_sample["observation.state"],
-                PROMPT_KEY: prompt,
+                TASK_KEY: task,
+                SUBTASK_KEY: subtask,
                 MODEL_ID_KEY: policy_id,
                 "observation/images/main_image": processed_sample["head"],
                 "observation/images/left_wrist_image": processed_sample["left_wrist"],
