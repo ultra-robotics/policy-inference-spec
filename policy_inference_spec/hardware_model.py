@@ -24,7 +24,6 @@ from policy_inference_spec.protocol import (
     OBSERVATION_HIDDEN_KEY,
     POLICY_ID_KEY,
     PREFIX_CHANGE_START_KEY,
-    PROMPT_KEY,
     SUBTASK_KEY,
     TASK_KEY,
     ServerFeature,
