@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
-import uuid
 from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator, Iterable, Sequence
 
@@ -21,22 +20,17 @@ from policy_inference_spec.hardware_model import (
 )
 from policy_inference_spec.protocol import (
     ACTION_KEY,
-    CHUNK_ID_KEY,
     DEFAULT_INFERENCE_SERVER_PORT,
     ENDPOINT_KEY,
     ENDPOINT_RESET,
-    ENDPOINT_REWARD,
     ENDPOINT_TELEMETRY,
     INFERENCE_TIME_KEY,
     JOINT_STATE_KEY,
     MODEL_ID_KEY,
     POLICY_ID_KEY,
-    REWARD_DESCRIPTION_KEY,
-    REWARDS_H_KEY,
     SUBTASK_KEY,
     TASK_KEY,
     STATUS_KEY,
-    RewardSignal,
     ServerFeature,
     ServerHandshake,
 )
@@ -102,7 +96,6 @@ def _inference_response(
     actions = example_policy_actions(joint_position, horizon=action_horizon)
     resp = {
         ACTION_KEY: actions,
-        CHUNK_ID_KEY: uuid.uuid4().hex[:12],
         INFERENCE_TIME_KEY: 0.25,
         POLICY_ID_KEY: EXAMPLE_POLICY_ID,
     }
@@ -130,23 +123,6 @@ async def handle_inference_connection(
             continue
         if frame.get(ENDPOINT_KEY) == ENDPOINT_TELEMETRY:
             await connection.send(serialize_to_msgpack({"status": "ok"}))
-            continue
-        if frame.get(ENDPOINT_KEY) == ENDPOINT_REWARD:
-            reward_signal = RewardSignal.from_payload(frame)
-            await connection.send(
-                serialize_to_msgpack(
-                    {
-                        ENDPOINT_KEY: ENDPOINT_REWARD,
-                        STATUS_KEY: "ok",
-                        REWARDS_H_KEY: list(reward_signal.rewards_h),
-                        **(
-                            {REWARD_DESCRIPTION_KEY: reward_signal.description}
-                            if reward_signal.description is not None
-                            else {}
-                        ),
-                    }
-                )
-            )
             continue
         validate_wire_inference_request_frame(frame)
         _ = frame[TASK_KEY]
