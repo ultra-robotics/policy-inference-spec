@@ -23,6 +23,7 @@ from policy_inference_spec.protocol import (
     ACTION_KEY,
     CHUNK_ID_KEY,
     DEFAULT_INFERENCE_SERVER_PORT,
+    DURATION_LOG_DATA_KEY,
     ENDPOINT_KEY,
     ENDPOINT_RESET,
     ENDPOINT_REWARD,
@@ -151,6 +152,7 @@ async def handle_inference_connection(
         validate_wire_inference_request_frame(frame)
         _ = frame[TASK_KEY]
         _ = frame[SUBTASK_KEY]
+        _ = frame[DURATION_LOG_DATA_KEY]
         _ = frame[MODEL_ID_KEY]
         resp = _inference_response(frame, action_horizon=action_horizon)
         await connection.send(serialize_to_msgpack(resp))

@@ -27,6 +27,7 @@ from policy_inference_spec.protocol import (
     CHUNK_ID_KEY,
     DUMB_REWARD_GOAL_ACTION_CHUNK_KEY,
     DUMB_REWARD_THRESHOLD_KEY,
+    DURATION_LOG_DATA_KEY,
     ENDPOINT_KEY,
     ENDPOINT_REWARD,
     INFERENCE_TIME_KEY,
@@ -49,10 +50,11 @@ def _minimal_jpeg() -> bytes:
 
 def _valid_wire_frame() -> dict[str, Any]:
     jpeg = _minimal_jpeg()
-    frame: dict[str, str | np.ndarray | bytes] = {
+    frame: dict[str, Any] = {
         JOINT_STATE_KEY: np.zeros(DEFAULT_HARDWARE_MODEL.state_dim, dtype=np.float32),
         TASK_KEY: "test_task",
         SUBTASK_KEY: "test_subtask",
+        DURATION_LOG_DATA_KEY: {},
         MODEL_ID_KEY: "",
     }
     for camera in DEFAULT_HARDWARE_MODEL.cameras:
@@ -253,6 +255,7 @@ async def test_predict_jpeg_encodes_ndarray_images_without_resizing() -> None:
         JOINT_STATE_KEY: np.zeros(DEFAULT_HARDWARE_MODEL.state_dim, dtype=np.float32),
         TASK_KEY: "test_task",
         SUBTASK_KEY: "test_subtask",
+        DURATION_LOG_DATA_KEY: {},
         MODEL_ID_KEY: "",
         "observation/images/main_image": np.zeros((23, 37, 3), dtype=np.uint8),
         "observation/images/left_wrist_image": np.zeros((19, 29, 3), dtype=np.uint8),
@@ -331,11 +334,12 @@ async def test_predict_raises_clear_restart_signal_on_service_restart() -> None:
 
 def test_validate_wire_inference_request_frame_rejects_hardware_model_field() -> None:
     jpeg = _minimal_jpeg()
-    frame: dict[str, str | np.ndarray | bytes] = {
+    frame: dict[str, Any] = {
         "hardware_model": "gen2",
         JOINT_STATE_KEY: np.zeros(DEFAULT_HARDWARE_MODEL.state_dim, dtype=np.float32),
         TASK_KEY: "test_task",
         SUBTASK_KEY: "test_subtask",
+        DURATION_LOG_DATA_KEY: {},
         MODEL_ID_KEY: "",
     }
     for camera in DEFAULT_HARDWARE_MODEL.cameras:

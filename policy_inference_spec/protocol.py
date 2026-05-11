@@ -33,6 +33,7 @@ CHUNK_ID_KEY = "chunk_id"
 DONE_KEY = "done"
 TASK_KEY = "task"
 SUBTASK_KEY = "subtask"
+DURATION_LOG_DATA_KEY = "duration_log_data"
 
 CAMERA_NAMES_KEY = "camera_names"
 IMAGE_RESOLUTION_KEY = "image_resolution"
@@ -43,7 +44,9 @@ SERVER_FEATURES_KEY = "server_features"
 STATUS_KEY = "status"
 ERROR_KEY = "error"
 
-InferenceMetadataValue: TypeAlias = str | int | float | bool | list[str] | list[int] | list[float]
+InferenceMetadataValue: TypeAlias = (
+    str | int | float | bool | None | list[str] | list[int] | list[float] | dict[str, Any]
+)
 ImageArray: TypeAlias = npt.NDArray[np.uint8]
 FloatArray: TypeAlias = npt.NDArray[np.float32]
 ProtocolValue: TypeAlias = ImageArray | FloatArray | bytes | InferenceMetadataValue
@@ -205,6 +208,7 @@ __all__ = [
     "DEFAULT_INFERENCE_SERVER_PORT",
     "DUMB_REWARD_GOAL_ACTION_CHUNK_KEY",
     "DUMB_REWARD_THRESHOLD_KEY",
+    "DURATION_LOG_DATA_KEY",
     "ENDPOINT_KEY",
     "ENDPOINT_RESET",
     "ENDPOINT_REWARD",
