@@ -66,7 +66,6 @@ async def test_replay_recording_orchestrates_predictions_and_logging(
             actions_d=np.zeros((4, action_dim), dtype=np.float32),
             total_latency_ms=1.5,
             policy_id=policy_id,
-            chunk_id=None,
         )
 
     def fake_log_to_rerun(
@@ -270,7 +269,6 @@ async def test_predict_sample_adds_unpadded_action_prefix(monkeypatch: pytest.Mo
                 actions_d=np.zeros((8, feature_bundle.action_dim), dtype=np.float32),
                 total_latency_ms=1.5,
                 policy_id="policy-id",
-                chunk_id=None,
             )
 
     monkeypatch.setattr(replay_rrd, "RemotePolicyClient", FakeRemotePolicyClient)

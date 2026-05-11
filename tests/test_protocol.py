@@ -11,20 +11,18 @@ from beartype.roar import BeartypeCallHintParamViolation
 from policy_inference_spec.codec import NdarrayField, deserialize_from_msgpack, encode_image, serialize_to_msgpack
 from policy_inference_spec.protocol import (
     ACTION_KEY,
-    CHUNK_ID_KEY,
-    DUMB_REWARD_GOAL_ACTION_CHUNK_KEY,
-    DUMB_REWARD_THRESHOLD_KEY,
     ENDPOINT_KEY,
-    ENDPOINT_REWARD,
     FloatArray,
     ProtocolPayload,
-    REWARD_DESCRIPTION_KEY,
-    REWARDS_H_KEY,
-    RewardSignal,
+    JOINT_STATE_KEY,
+    MODEL_ID_KEY,
+    REWARD_KEY,
+    SUBTASK_KEY,
+    TASK_KEY,
     ServerFeature,
     ServerHandshake,
 )
-from policy_inference_spec.hardware_model import validate_wire_inference_response
+from policy_inference_spec.hardware_model import DEFAULT_HARDWARE_MODEL, validate_wire_inference_request_frame, validate_wire_inference_response
 
 
 def test_serialize_to_msgpack_uses_flat_ndarray_tags() -> None:
@@ -98,25 +96,6 @@ def test_validate_wire_inference_response_summarizes_binary_like_payloads() -> N
     assert "\\x00" not in message
 
 
-def test_validate_wire_inference_response_accepts_optional_chunk_id() -> None:
-    validate_wire_inference_response(
-        {
-            ACTION_KEY: np.zeros((2, 25), dtype=np.float32),
-            CHUNK_ID_KEY: "abc123",
-        }
-    )
-
-
-def test_validate_wire_inference_response_rejects_empty_chunk_id() -> None:
-    with pytest.raises(AssertionError, match=CHUNK_ID_KEY):
-        validate_wire_inference_response(
-            {
-                ACTION_KEY: np.zeros((2, 25), dtype=np.float32),
-                CHUNK_ID_KEY: "",
-            }
-        )
-
-
 def test_encode_image_preserves_original_shape_metadata() -> None:
     expected = np.zeros((1, 12, 16, 3), dtype=np.uint8)
 
@@ -144,46 +123,30 @@ def test_server_handshake_round_trip_preserves_server_features() -> None:
     assert decoded.supports(ServerFeature.REWARDS)
 
 
-def test_reward_signal_round_trip_with_optional_description() -> None:
-    reward_signal = RewardSignal(
-        chunk_id="chunk-abc",
-        rewards_h=(1.5, 0.0),
-        description="The box was successfully sealed",
-    )
-
-    assert RewardSignal.from_payload(reward_signal.to_payload()) == reward_signal
-    assert reward_signal.to_payload() == {
-        ENDPOINT_KEY: ENDPOINT_REWARD,
-        CHUNK_ID_KEY: "chunk-abc",
-        REWARDS_H_KEY: [1.5, 0.0],
-        REWARD_DESCRIPTION_KEY: "The box was successfully sealed",
-    }
-
-
-def test_reward_signal_rejects_empty_chunk_id() -> None:
-    with pytest.raises(AssertionError, match=CHUNK_ID_KEY):
-        RewardSignal(chunk_id="", rewards_h=(1.0,))
-
-
-def test_reward_signal_from_payload_requires_chunk_id() -> None:
-    with pytest.raises(AssertionError, match=CHUNK_ID_KEY):
-        RewardSignal.from_payload(
-            {
-                ENDPOINT_KEY: ENDPOINT_REWARD,
-                REWARDS_H_KEY: [1.0],
-            }
-        )
-
-
-def test_serialize_to_msgpack_accepts_optional_dumb_reward_goal_chunk_and_threshold() -> None:
+def test_validate_wire_inference_request_frame_accepts_scalar_reward() -> None:
     payload: ProtocolPayload = {
-        DUMB_REWARD_GOAL_ACTION_CHUNK_KEY: np.zeros((2, 25), dtype=np.float32),
-        DUMB_REWARD_THRESHOLD_KEY: 0.25,
+        JOINT_STATE_KEY: np.zeros(DEFAULT_HARDWARE_MODEL.state_dim, dtype=np.float32),
+        TASK_KEY: "",
+        SUBTASK_KEY: "",
+        MODEL_ID_KEY: "",
+        REWARD_KEY: 1.25,
     }
+    for camera in DEFAULT_HARDWARE_MODEL.cameras:
+        payload[f"observation/{camera}"] = np.zeros(DEFAULT_HARDWARE_MODEL.image_resolution + (3,), dtype=np.uint8)
 
-    decoded = deserialize_from_msgpack(serialize_to_msgpack(payload))
+    validate_wire_inference_request_frame(payload)
 
-    decoded_goal_action_chunk_hd = decoded[DUMB_REWARD_GOAL_ACTION_CHUNK_KEY]
-    assert isinstance(decoded_goal_action_chunk_hd, np.ndarray)
-    assert decoded_goal_action_chunk_hd.shape == (2, 25)
-    assert decoded[DUMB_REWARD_THRESHOLD_KEY] == pytest.approx(0.25)
+
+def test_validate_wire_inference_request_frame_rejects_non_numeric_reward() -> None:
+    payload: ProtocolPayload = {
+        JOINT_STATE_KEY: np.zeros(DEFAULT_HARDWARE_MODEL.state_dim, dtype=np.float32),
+        TASK_KEY: "",
+        SUBTASK_KEY: "",
+        MODEL_ID_KEY: "",
+        REWARD_KEY: "1.25",
+    }
+    for camera in DEFAULT_HARDWARE_MODEL.cameras:
+        payload[f"observation/{camera}"] = np.zeros(DEFAULT_HARDWARE_MODEL.image_resolution + (3,), dtype=np.uint8)
+
+    with pytest.raises(AssertionError, match=REWARD_KEY):
+        validate_wire_inference_request_frame(payload)

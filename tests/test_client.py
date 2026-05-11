@@ -24,21 +24,14 @@ from policy_inference_spec.codec import deserialize_from_msgpack, serialize_to_m
 from policy_inference_spec.protocol import (
     ACTION_KEY,
     ACTION_PREFIX_KEY,
-    CHUNK_ID_KEY,
-    DUMB_REWARD_GOAL_ACTION_CHUNK_KEY,
-    DUMB_REWARD_THRESHOLD_KEY,
-    ENDPOINT_KEY,
-    ENDPOINT_REWARD,
     INFERENCE_TIME_KEY,
     JOINT_STATE_KEY,
     MODEL_ID_KEY,
     PREFIX_CHANGE_START_KEY,
     POLICY_ID_KEY,
-    REWARD_DESCRIPTION_KEY,
-    REWARDS_H_KEY,
+    REWARD_KEY,
     SUBTASK_KEY,
     TASK_KEY,
-    STATUS_KEY,
     ServerFeature,
 )
 
@@ -108,7 +101,6 @@ async def test_predict_round_trip_with_mock_websocket() -> None:
             ACTION_KEY: actions,
             INFERENCE_TIME_KEY: 3.5,
             POLICY_ID_KEY: "policy-1",
-            CHUNK_ID_KEY: "chunk-xyz",
         }
     )
     ws_mock = MagicMock()
@@ -126,7 +118,6 @@ async def test_predict_round_trip_with_mock_websocket() -> None:
         await client.aclose()
 
     assert pred.policy_id == "policy-1"
-    assert pred.chunk_id == "chunk-xyz"
     assert pred.actions_d.shape == (4, DEFAULT_HARDWARE_MODEL.action_dim)
     assert pred.actions_d.dtype == np.float32
     assert pred.total_latency_ms >= 0.0
@@ -135,36 +126,8 @@ async def test_predict_round_trip_with_mock_websocket() -> None:
 
 
 @pytest.mark.asyncio
-async def test_predict_accepts_response_without_chunk_id() -> None:
-    cfg = serialize_to_msgpack(_server_handshake_payload())
-    actions = np.zeros((4, DEFAULT_HARDWARE_MODEL.action_dim), dtype=np.float32)
-    resp = serialize_to_msgpack(
-        {
-            ACTION_KEY: actions,
-            POLICY_ID_KEY: "policy-old",
-        }
-    )
-    ws_mock = MagicMock()
-    ws_mock.recv = AsyncMock(side_effect=[cfg, resp])
-    ws_mock.send = AsyncMock()
-    ws_mock.close = AsyncMock()
-
-    async def fake_connect(*_a: object, **_kw: object) -> MagicMock:
-        return ws_mock
-
-    frame = _valid_wire_frame()
-    with patch("policy_inference_spec.client.websockets.connect", side_effect=fake_connect):
-        client = RemotePolicyClient("ws://127.0.0.1:9/ws")
-        pred = await client.predict(frame)
-        await client.aclose()
-
-    assert pred.chunk_id is None
-    assert pred.policy_id == "policy-old"
-
-
-@pytest.mark.asyncio
-async def test_predict_preserves_optional_dumb_reward_goal_chunk_and_threshold() -> None:
-    cfg = serialize_to_msgpack(_server_handshake_payload())
+async def test_predict_includes_reward_when_server_supports_rewards() -> None:
+    cfg = serialize_to_msgpack(_server_handshake_payload(rewards_enabled=True))
     resp = serialize_to_msgpack(
         {
             ACTION_KEY: np.zeros((1, DEFAULT_HARDWARE_MODEL.action_dim), dtype=np.float32),
@@ -180,22 +143,15 @@ async def test_predict_preserves_optional_dumb_reward_goal_chunk_and_threshold()
         return ws_mock
 
     frame = _valid_wire_frame()
-    frame[DUMB_REWARD_GOAL_ACTION_CHUNK_KEY] = np.full((2, DEFAULT_HARDWARE_MODEL.action_dim), 0.75, dtype=np.float32)
-    frame[DUMB_REWARD_THRESHOLD_KEY] = 0.5
     with patch("policy_inference_spec.client.websockets.connect", side_effect=fake_connect):
         client = RemotePolicyClient("ws://127.0.0.1:9/ws")
-        await client.predict(frame)
+        await client.predict(frame, reward=2.5)
         await client.aclose()
 
     await_args = ws_mock.send.await_args
     assert await_args is not None
     sent_payload = deserialize_from_msgpack(await_args.args[0])
-    sent_goal_action_chunk_hd = np.asarray(sent_payload[DUMB_REWARD_GOAL_ACTION_CHUNK_KEY], dtype=np.float32)
-    np.testing.assert_allclose(
-        sent_goal_action_chunk_hd,
-        np.full((2, DEFAULT_HARDWARE_MODEL.action_dim), 0.75, dtype=np.float32),
-    )
-    assert sent_payload[DUMB_REWARD_THRESHOLD_KEY] == pytest.approx(0.5)
+    assert sent_payload[REWARD_KEY] == pytest.approx(2.5)
 
 
 @pytest.mark.asyncio
@@ -380,69 +336,16 @@ def test_validate_wire_inference_request_frame_rejects_nonfloating_action_prefix
 
 
 @pytest.mark.asyncio
-async def test_reward_sends_default_value_when_server_supports_rewards() -> None:
-    cfg = serialize_to_msgpack(_server_handshake_payload(rewards_enabled=True))
-    reward_ack = serialize_to_msgpack({ENDPOINT_KEY: ENDPOINT_REWARD, STATUS_KEY: "ok", REWARDS_H_KEY: [1.0]})
-    ws_mock = MagicMock()
-    ws_mock.recv = AsyncMock(side_effect=[cfg, reward_ack])
-    ws_mock.send = AsyncMock()
-    ws_mock.close = AsyncMock()
-
-    async def fake_connect(*_a: object, **_kw: object) -> MagicMock:
-        return ws_mock
-
-    with patch("policy_inference_spec.client.websockets.connect", side_effect=fake_connect):
-        client = RemotePolicyClient("ws://127.0.0.1:9/ws")
-        await client.reward(chunk_id="chunk-1")
-        await client.aclose()
-
-    ws_mock.send.assert_called_once()
-    await_args = ws_mock.send.await_args
-    assert await_args is not None
-    sent_payload = deserialize_from_msgpack(await_args.args[0])
-    assert sent_payload == {ENDPOINT_KEY: ENDPOINT_REWARD, CHUNK_ID_KEY: "chunk-1", REWARDS_H_KEY: [1.0]}
-
-
-@pytest.mark.asyncio
-async def test_reward_includes_description_only_when_provided() -> None:
-    cfg = serialize_to_msgpack(_server_handshake_payload(rewards_enabled=True))
-    reward_ack = serialize_to_msgpack(
+async def test_predict_omits_reward_when_server_lacks_reward_support(caplog: pytest.LogCaptureFixture) -> None:
+    cfg = serialize_to_msgpack(_server_handshake_payload(rewards_enabled=False))
+    resp = serialize_to_msgpack(
         {
-            ENDPOINT_KEY: ENDPOINT_REWARD,
-            STATUS_KEY: "ok",
-            REWARDS_H_KEY: [2.5],
-            REWARD_DESCRIPTION_KEY: "The box was successfully sealed",
+            ACTION_KEY: np.zeros((1, DEFAULT_HARDWARE_MODEL.action_dim), dtype=np.float32),
+            POLICY_ID_KEY: "policy-1",
         }
     )
     ws_mock = MagicMock()
-    ws_mock.recv = AsyncMock(side_effect=[cfg, reward_ack])
-    ws_mock.send = AsyncMock()
-    ws_mock.close = AsyncMock()
-
-    async def fake_connect(*_a: object, **_kw: object) -> MagicMock:
-        return ws_mock
-
-    with patch("policy_inference_spec.client.websockets.connect", side_effect=fake_connect):
-        client = RemotePolicyClient("ws://127.0.0.1:9/ws")
-        await client.reward([2.5], "The box was successfully sealed", chunk_id="chunk-2")
-        await client.aclose()
-
-    await_args = ws_mock.send.await_args
-    assert await_args is not None
-    sent_payload = deserialize_from_msgpack(await_args.args[0])
-    assert sent_payload == {
-        ENDPOINT_KEY: ENDPOINT_REWARD,
-        CHUNK_ID_KEY: "chunk-2",
-        REWARDS_H_KEY: [2.5],
-        REWARD_DESCRIPTION_KEY: "The box was successfully sealed",
-    }
-
-
-@pytest.mark.asyncio
-async def test_reward_drops_and_warns_when_server_lacks_reward_support(caplog: pytest.LogCaptureFixture) -> None:
-    cfg = serialize_to_msgpack(_server_handshake_payload(rewards_enabled=False))
-    ws_mock = MagicMock()
-    ws_mock.recv = AsyncMock(side_effect=[cfg])
+    ws_mock.recv = AsyncMock(side_effect=[cfg, resp])
     ws_mock.send = AsyncMock()
     ws_mock.close = AsyncMock()
 
@@ -452,8 +355,11 @@ async def test_reward_drops_and_warns_when_server_lacks_reward_support(caplog: p
     with patch("policy_inference_spec.client.websockets.connect", side_effect=fake_connect):
         client = RemotePolicyClient("ws://127.0.0.1:9/ws")
         with caplog.at_level("WARNING", logger="policy_inference_spec.client"):
-            await client.reward([3.0], "ignored", chunk_id="chunk-3")
+            await client.predict(_valid_wire_frame(), reward=3.0)
         await client.aclose()
 
-    ws_mock.send.assert_not_called()
+    await_args = ws_mock.send.await_args
+    assert await_args is not None
+    sent_payload = deserialize_from_msgpack(await_args.args[0])
+    assert REWARD_KEY not in sent_payload
     assert "Dropping reward because server does not advertise rewards support" in caplog.text

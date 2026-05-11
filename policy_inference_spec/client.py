@@ -22,16 +22,11 @@ from policy_inference_spec.codec import deserialize_from_msgpack, encode_image, 
 from policy_inference_spec.hardware_model import validate_wire_inference_request_frame, validate_wire_inference_response
 from policy_inference_spec.protocol import (
     ACTION_KEY,
-    CHUNK_ID_KEY,
     ACTION_PREFIX_KEY,
-    ENDPOINT_KEY,
-    ENDPOINT_REWARD,
     INFERENCE_TIME_KEY,
     JOINT_STATE_KEY,
     PREFIX_CHANGE_START_KEY,
-    REWARDS_H_KEY,
-    RewardSignal,
-    STATUS_KEY,
+    REWARD_KEY,
     ServerFeature,
     ServerHandshake,
 )
@@ -58,7 +53,6 @@ class RemotePolicyPrediction:
     actions_d: npt.NDArray[np.float32]
     total_latency_ms: float
     policy_id: str
-    chunk_id: str | None
 
 
 class InferenceServiceRestartedError(RuntimeError):
@@ -216,45 +210,21 @@ class RemotePolicyClient:
                     pass
         return
 
-    async def reward(
-        self,
-        rewards_h: list[float] | tuple[float, ...] = (1.0,),
-        description: str | None = None,
-        *,
-        chunk_id: str,
-    ) -> None:
-        await self._ensure_ws()
-        assert self._server_config is not None
-        if not self._server_config.supports(ServerFeature.REWARDS):
-            LOGGER.warning("Dropping reward because server does not advertise %s support", ServerFeature.REWARDS)
-            return
-        reward_signal = RewardSignal(
-            chunk_id=chunk_id,
-            rewards_h=tuple(float(reward) for reward in rewards_h),
-            description=description,
-        )
-        async with self._lock:
-            assert self._ws is not None
-            await self._ws.send(serialize_to_msgpack(reward_signal.to_payload()))
-            response_raw = await self._ws.recv()
-        if isinstance(response_raw, str):
-            _emit_server_error_verbatim(response_raw)
-            raise AssertionError("unexpected text response from inference server")
-        response = deserialize_from_msgpack(response_raw)
-        _emit_server_error_verbatim(response)
-        assert isinstance(response, dict), f"unexpected reward response type {type(response)}"
-        assert response.get(STATUS_KEY) == "ok", f"unexpected reward response payload: {response}"
-        if response.get(ENDPOINT_KEY) == ENDPOINT_REWARD:
-            rewards_ack = response.get(REWARDS_H_KEY)
-            assert rewards_ack is None or isinstance(rewards_ack, list), f"{REWARDS_H_KEY} must be list[float]"
-
     async def predict(
         self,
         wire_frame: dict[str, Any],
+        *,
+        reward: float | None = None,
     ) -> RemotePolicyPrediction:
         try:
             await self._ensure_ws()
+            assert self._server_config is not None
             wire_frame = self._encode_wire_frame_images(wire_frame)
+            if reward is not None:
+                if self._server_config.supports(ServerFeature.REWARDS):
+                    wire_frame[REWARD_KEY] = float(reward)
+                else:
+                    LOGGER.warning("Dropping reward because server does not advertise %s support", ServerFeature.REWARDS)
             validate_wire_inference_request_frame(wire_frame)
             self._warn_on_camera_name_mismatch(wire_frame)
             payload = serialize_to_msgpack(wire_frame)
@@ -286,11 +256,6 @@ class RemotePolicyClient:
             assert isinstance(infer_raw, (int, float)), f"{INFERENCE_TIME_KEY} must be numeric"
             server_latency_ms = float(infer_raw)
         policy_id_used = str(result.get("policy_id", ""))
-        chunk_id_raw = result.get(CHUNK_ID_KEY)
-        chunk_id_used: str | None = None
-        if chunk_id_raw is not None:
-            assert isinstance(chunk_id_raw, str) and chunk_id_raw, f"{CHUNK_ID_KEY} must be a non-empty str"
-            chunk_id_used = chunk_id_raw
         self._record_latency(total_latency_ms=total_latency_ms, server_latency_ms=server_latency_ms)
 
         actions_d = np.array(actions, dtype=np.float32)
@@ -298,7 +263,6 @@ class RemotePolicyClient:
             actions_d=actions_d,
             total_latency_ms=total_latency_ms,
             policy_id=policy_id_used,
-            chunk_id=chunk_id_used,
         )
 
 
