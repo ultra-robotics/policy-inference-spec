@@ -18,18 +18,12 @@ INFERENCE_TIME_KEY = "inference_time"
 ENDPOINT_KEY = "endpoint"
 ENDPOINT_RESET = "reset"
 ENDPOINT_TELEMETRY = "telemetry"
-ENDPOINT_REWARD = "reward"
 MODEL_ID_KEY = "model_id"
 POLICY_ID_KEY = "policy_id"
-DUMB_REWARD_GOAL_ACTION_CHUNK_KEY = "dumb_reward_goal_action_chunk"
-DUMB_REWARD_THRESHOLD_KEY = "dumb_reward_threshold"
-FAST_MOCK_ACTION_DIM_KEY = "fast_mock_action_dim"
-FAST_MOCK_ACTION_HORIZON_KEY = "fast_mock_action_horizon"
-REWARDS_H_KEY = "rewards_h"
+REWARD_KEY = "reward"
 ACTION_PREFIX_KEY = "action_prefix"
 PREFIX_CHANGE_START_KEY = "prefix_change_start"
 REWARD_DESCRIPTION_KEY = "description"
-CHUNK_ID_KEY = "chunk_id"
 DONE_KEY = "done"
 TASK_KEY = "task"
 SUBTASK_KEY = "subtask"
@@ -150,68 +144,16 @@ def make_server_handshake(
         server_features=_normalize_server_features(server_features),
     )
 
-
-@dataclass(frozen=True)
-class RewardSignal:
-    chunk_id: str
-    rewards_h: tuple[float, ...] = (1.0,)
-    description: str | None = None
-
-    def __post_init__(self) -> None:
-        assert isinstance(self.chunk_id, str) and self.chunk_id, f"{CHUNK_ID_KEY} must be a non-empty str"
-        assert isinstance(self.rewards_h, tuple), f"{REWARDS_H_KEY} must be tuple[float, ...]"
-        assert self.rewards_h, f"{REWARDS_H_KEY} must not be empty"
-        assert all(isinstance(reward, (int, float)) for reward in self.rewards_h), f"{REWARDS_H_KEY} must be numeric"
-        if self.description is not None:
-            assert isinstance(self.description, str), f"{REWARD_DESCRIPTION_KEY} must be str"
-
-    def to_payload(self) -> ProtocolPayload:
-        payload: ProtocolPayload = {
-            ENDPOINT_KEY: ENDPOINT_REWARD,
-            CHUNK_ID_KEY: self.chunk_id,
-            REWARDS_H_KEY: [float(reward) for reward in self.rewards_h],
-        }
-        if self.description is not None:
-            payload[REWARD_DESCRIPTION_KEY] = self.description
-        return payload
-
-    @classmethod
-    def from_payload(cls, payload: Mapping[str, Any]) -> RewardSignal:
-        assert isinstance(payload, Mapping), f"reward payload must be mapping, got {type(payload)}"
-        assert payload.get(ENDPOINT_KEY) == ENDPOINT_REWARD, (
-            f"{ENDPOINT_KEY} must be {ENDPOINT_REWARD!r}, got {payload.get(ENDPOINT_KEY)!r}"
-        )
-        chunk_id = payload.get(CHUNK_ID_KEY)
-        assert isinstance(chunk_id, str) and chunk_id, f"{CHUNK_ID_KEY} must be a non-empty str"
-        rewards_h_raw = payload.get(REWARDS_H_KEY, [1.0])
-        assert isinstance(rewards_h_raw, list), f"{REWARDS_H_KEY} must be list[float]"
-        assert rewards_h_raw, f"{REWARDS_H_KEY} must not be empty"
-        assert all(isinstance(reward, (int, float)) for reward in rewards_h_raw), f"{REWARDS_H_KEY} must be numeric"
-        description = payload.get(REWARD_DESCRIPTION_KEY)
-        assert description is None or isinstance(description, str), f"{REWARD_DESCRIPTION_KEY} must be str"
-        return cls(
-            chunk_id=chunk_id,
-            rewards_h=tuple(float(reward) for reward in rewards_h_raw),
-            description=description,
-        )
-
-
 __all__ = [
     "ACTION_KEY",
     "ACTION_PREFIX_KEY",
     "ACTION_SPACE_KEY",
     "CAMERA_NAMES_KEY",
-    "CHUNK_ID_KEY",
     "DEFAULT_INFERENCE_SERVER_PORT",
-    "DUMB_REWARD_GOAL_ACTION_CHUNK_KEY",
-    "DUMB_REWARD_THRESHOLD_KEY",
     "ENDPOINT_KEY",
     "ENDPOINT_RESET",
-    "ENDPOINT_REWARD",
     "ENDPOINT_TELEMETRY",
     "ERROR_KEY",
-    "FAST_MOCK_ACTION_DIM_KEY",
-    "FAST_MOCK_ACTION_HORIZON_KEY",
     "FloatArray",
     "IMAGE_RESOLUTION_KEY",
     "ImageArray",
@@ -228,8 +170,7 @@ __all__ = [
     "ProtocolPayload",
     "ProtocolValue",
     "REWARD_DESCRIPTION_KEY",
-    "REWARDS_H_KEY",
-    "RewardSignal",
+    "REWARD_KEY",
     "SERVER_FEATURES_KEY",
     "STATUS_KEY",
     "SUBTASK_KEY",

@@ -11,12 +11,7 @@ import numpy.typing as npt
 from policy_inference_spec.protocol import (
     ACTION_KEY,
     ACTION_PREFIX_KEY,
-    CHUNK_ID_KEY,
-    DUMB_REWARD_GOAL_ACTION_CHUNK_KEY,
-    DUMB_REWARD_THRESHOLD_KEY,
     ENDPOINT_KEY,
-    FAST_MOCK_ACTION_DIM_KEY,
-    FAST_MOCK_ACTION_HORIZON_KEY,
     INFERENCE_TIME_KEY,
     JOINT_STATE_KEY,
     MODEL_ID_KEY,
@@ -24,6 +19,7 @@ from policy_inference_spec.protocol import (
     OBSERVATION_HIDDEN_KEY,
     POLICY_ID_KEY,
     PREFIX_CHANGE_START_KEY,
+    REWARD_KEY,
     SUBTASK_KEY,
     TASK_KEY,
     ServerFeature,
@@ -137,14 +133,11 @@ def _wire_inference_request_keys(*, hardware_model: HardwareModel = DEFAULT_HARD
 def _optional_wire_inference_request_keys() -> frozenset[str]:
     return frozenset(
         {
-            DUMB_REWARD_GOAL_ACTION_CHUNK_KEY,
-            DUMB_REWARD_THRESHOLD_KEY,
-            FAST_MOCK_ACTION_DIM_KEY,
-            FAST_MOCK_ACTION_HORIZON_KEY,
             ACTION_PREFIX_KEY,
             PREFIX_CHANGE_START_KEY,
             OBSERVATION_ENV_KEY,
             OBSERVATION_HIDDEN_KEY,
+            REWARD_KEY,
             TASK_KEY,
             SUBTASK_KEY,
         }
@@ -200,24 +193,13 @@ def validate_wire_inference_request_frame(
     
     assert isinstance(frame[TASK_KEY], str), f"{TASK_KEY} must be str"
     assert isinstance(frame[SUBTASK_KEY], str), f"{SUBTASK_KEY} must be str"
-    has_task = TASK_KEY != ""
-    has_subtask = SUBTASK_KEY != ""
+    has_task = frame[TASK_KEY] != ""
+    has_subtask = frame[SUBTASK_KEY] != ""
     assert has_task == has_subtask, f"{TASK_KEY} and {SUBTASK_KEY} may either both take on values, or neither may have a value"
-    assert isinstance(frame[MODEL_ID_KEY], str), f"{MODEL_ID_KEY} must be str"
-    fast_mock_action_dim_raw = frame.get(FAST_MOCK_ACTION_DIM_KEY)
-    fast_mock_action_horizon_raw = frame.get(FAST_MOCK_ACTION_HORIZON_KEY)
-    has_fast_mock_action_dim = fast_mock_action_dim_raw is not None
-    has_fast_mock_action_horizon = fast_mock_action_horizon_raw is not None
-    assert has_fast_mock_action_dim == has_fast_mock_action_horizon, (
-        f"{FAST_MOCK_ACTION_DIM_KEY} and {FAST_MOCK_ACTION_HORIZON_KEY} must be provided together"
-    )
     expected_action_dim = hardware_model.action_dim
-    if has_fast_mock_action_dim:
-        assert isinstance(fast_mock_action_dim_raw, int), f"{FAST_MOCK_ACTION_DIM_KEY} must be int"
-        assert isinstance(fast_mock_action_horizon_raw, int), f"{FAST_MOCK_ACTION_HORIZON_KEY} must be int"
-        assert fast_mock_action_dim_raw > 0, f"{FAST_MOCK_ACTION_DIM_KEY} must be positive"
-        assert fast_mock_action_horizon_raw > 0, f"{FAST_MOCK_ACTION_HORIZON_KEY} must be positive"
-        expected_action_dim = fast_mock_action_dim_raw
+    assert isinstance(frame[MODEL_ID_KEY], str), f"{MODEL_ID_KEY} must be str"
+    if REWARD_KEY in frame:
+        assert isinstance(frame[REWARD_KEY], (int, float)), f"{REWARD_KEY} must be numeric"
     has_action_prefix = ACTION_PREFIX_KEY in frame
     has_prefix_change_start = PREFIX_CHANGE_START_KEY in frame
     assert has_action_prefix == has_prefix_change_start, (
@@ -236,26 +218,6 @@ def validate_wire_inference_request_frame(
         prefix_change_start = frame[PREFIX_CHANGE_START_KEY]
         assert isinstance(prefix_change_start, int), f"{PREFIX_CHANGE_START_KEY} must be int"
         assert prefix_change_start >= 0, f"{PREFIX_CHANGE_START_KEY} must be non-negative"
-    has_goal_chunk = DUMB_REWARD_GOAL_ACTION_CHUNK_KEY in frame
-    has_threshold = DUMB_REWARD_THRESHOLD_KEY in frame
-    assert has_goal_chunk == has_threshold, (
-        f"{DUMB_REWARD_GOAL_ACTION_CHUNK_KEY} and {DUMB_REWARD_THRESHOLD_KEY} must be provided together"
-    )
-    if has_goal_chunk:
-        goal_action_chunk = frame[DUMB_REWARD_GOAL_ACTION_CHUNK_KEY]
-        assert isinstance(goal_action_chunk, np.ndarray), f"{DUMB_REWARD_GOAL_ACTION_CHUNK_KEY} must be ndarray"
-        assert goal_action_chunk.ndim == 2, (
-            f"{DUMB_REWARD_GOAL_ACTION_CHUNK_KEY} must be 2-D, got {goal_action_chunk.shape}"
-        )
-        assert goal_action_chunk.shape[1] == expected_action_dim, (
-            f"{DUMB_REWARD_GOAL_ACTION_CHUNK_KEY} second dim must be {expected_action_dim}, got {goal_action_chunk.shape}"
-        )
-        assert np.issubdtype(goal_action_chunk.dtype, np.floating), (
-            f"{DUMB_REWARD_GOAL_ACTION_CHUNK_KEY} must be floating ndarray, got {goal_action_chunk.dtype}"
-        )
-        threshold = frame[DUMB_REWARD_THRESHOLD_KEY]
-        assert isinstance(threshold, (int, float)), f"{DUMB_REWARD_THRESHOLD_KEY} must be numeric"
-        assert float(threshold) > 0.0, f"{DUMB_REWARD_THRESHOLD_KEY} must be positive"
     if OBSERVATION_HIDDEN_KEY in frame:
         hidden = frame[OBSERVATION_HIDDEN_KEY]
         assert isinstance(hidden, np.ndarray), f"{OBSERVATION_HIDDEN_KEY} must be ndarray"
@@ -297,7 +259,7 @@ def validate_wire_inference_response(
 ) -> None:
     response_summary = _summarize_response_payload(result)
     assert "error" not in result, f"unexpected error payload: {response_summary}"
-    allowed = frozenset({ACTION_KEY, CHUNK_ID_KEY, INFERENCE_TIME_KEY, POLICY_ID_KEY})
+    allowed = frozenset({ACTION_KEY, INFERENCE_TIME_KEY, POLICY_ID_KEY})
     assert set(result.keys()) <= allowed, (
         f"response keys {set(result.keys())} not subset of {allowed}; summary={response_summary}"
     )
@@ -313,10 +275,6 @@ def validate_wire_inference_response(
         assert isinstance(result[INFERENCE_TIME_KEY], (int, float)), "inference_time must be numeric"
     if POLICY_ID_KEY in result:
         assert isinstance(result[POLICY_ID_KEY], str), f"{POLICY_ID_KEY} must be str"
-    if CHUNK_ID_KEY in result:
-        chunk_id = result[CHUNK_ID_KEY]
-        assert isinstance(chunk_id, str) and chunk_id, f"{CHUNK_ID_KEY} must be a non-empty str"
-
 
 __all__ = [
     "DEFAULT_HARDWARE_MODEL",
