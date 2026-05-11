@@ -8,6 +8,7 @@ from typing import Any, cast
 from policy_inference_spec.client import RemotePolicyClient
 from policy_inference_spec.hardware_model import DEFAULT_HARDWARE_MODEL
 from policy_inference_spec.protocol import (
+    DURATION_LOG_DATA_KEY,
     JOINT_STATE_KEY,
     MODEL_ID_KEY,
     SUBTASK_KEY,
@@ -33,6 +34,7 @@ def _random_predict_frame() -> dict[str, object]:
         JOINT_STATE_KEY: rng.standard_normal(DEFAULT_HARDWARE_MODEL.state_dim, dtype=np.float32),
         TASK_KEY: "",
         SUBTASK_KEY: "",
+        DURATION_LOG_DATA_KEY: {},
         MODEL_ID_KEY: "",
     }
     for cam in DEFAULT_HARDWARE_MODEL.cameras:

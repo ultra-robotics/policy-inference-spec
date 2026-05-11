@@ -11,7 +11,13 @@ import pytest
 import policy_inference_spec.replay_rrd as replay_rrd
 from policy_inference_spec.client import RemotePolicyPrediction
 from policy_inference_spec.feature_engineering import FeatureBundle, ScalarFeature, SchemaName, VideoFeature
-from policy_inference_spec.protocol import ACTION_PREFIX_KEY, PREFIX_CHANGE_START_KEY, SUBTASK_KEY, TASK_KEY
+from policy_inference_spec.protocol import (
+    ACTION_PREFIX_KEY,
+    DURATION_LOG_DATA_KEY,
+    PREFIX_CHANGE_START_KEY,
+    SUBTASK_KEY,
+    TASK_KEY,
+)
 
 
 @pytest.mark.asyncio
@@ -290,6 +296,7 @@ async def test_predict_sample_adds_unpadded_action_prefix(monkeypatch: pytest.Mo
     assert isinstance(request, dict)
     assert request[TASK_KEY] == "task"
     assert request[SUBTASK_KEY] == "sub task"
+    assert request[DURATION_LOG_DATA_KEY] == {}
     prefix = captured[ACTION_PREFIX_KEY]
     assert isinstance(prefix, np.ndarray)
     assert prefix.shape == (5, feature_bundle.action_dim)

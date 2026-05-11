@@ -14,6 +14,7 @@ from policy_inference_spec.protocol import (
     CHUNK_ID_KEY,
     DUMB_REWARD_GOAL_ACTION_CHUNK_KEY,
     DUMB_REWARD_THRESHOLD_KEY,
+    DURATION_LOG_DATA_KEY,
     ENDPOINT_KEY,
     FAST_MOCK_ACTION_DIM_KEY,
     FAST_MOCK_ACTION_HORIZON_KEY,
@@ -130,6 +131,9 @@ def _wire_inference_request_keys(*, hardware_model: HardwareModel = DEFAULT_HARD
             JOINT_STATE_KEY,
             *_observation_keys(hardware_model),
             MODEL_ID_KEY,
+            TASK_KEY,
+            SUBTASK_KEY,
+            DURATION_LOG_DATA_KEY,
         }
     )
 
@@ -145,8 +149,6 @@ def _optional_wire_inference_request_keys() -> frozenset[str]:
             PREFIX_CHANGE_START_KEY,
             OBSERVATION_ENV_KEY,
             OBSERVATION_HIDDEN_KEY,
-            TASK_KEY,
-            SUBTASK_KEY,
         }
     )
 
@@ -197,11 +199,12 @@ def validate_wire_inference_request_frame(
     allowed = required | _optional_wire_inference_request_keys()
     keys = set(frame.keys())
     assert required <= keys <= allowed, f"wire inference keys {keys} must include {required} and stay within {allowed}"
-    
+
     assert isinstance(frame[TASK_KEY], str), f"{TASK_KEY} must be str"
     assert isinstance(frame[SUBTASK_KEY], str), f"{SUBTASK_KEY} must be str"
-    has_task = TASK_KEY != ""
-    has_subtask = SUBTASK_KEY != ""
+    assert isinstance(frame[DURATION_LOG_DATA_KEY], dict), f"{DURATION_LOG_DATA_KEY} must be dict"
+    has_task = frame[TASK_KEY] != ""
+    has_subtask = frame[SUBTASK_KEY] != ""
     assert has_task == has_subtask, f"{TASK_KEY} and {SUBTASK_KEY} may either both take on values, or neither may have a value"
     assert isinstance(frame[MODEL_ID_KEY], str), f"{MODEL_ID_KEY} must be str"
     fast_mock_action_dim_raw = frame.get(FAST_MOCK_ACTION_DIM_KEY)

@@ -31,6 +31,7 @@ from policy_inference_spec.protocol import (
     PREFIX_CHANGE_START_KEY,
     SUBTASK_KEY,
     TASK_KEY,
+    DURATION_LOG_DATA_KEY,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -224,6 +225,7 @@ async def predict_sample(
                 JOINT_STATE_KEY: processed_sample["observation.state"],
                 TASK_KEY: task,
                 SUBTASK_KEY: subtask,
+                DURATION_LOG_DATA_KEY: {},
                 MODEL_ID_KEY: policy_id,
                 "observation/images/main_image": processed_sample["head"],
                 "observation/images/left_wrist_image": processed_sample["left_wrist"],
