@@ -205,6 +205,17 @@ class RemotePolicyClient:
         await self._close_ws()
         raise InferenceServiceRestartedError("Inference service restarted during prediction") from exc
 
+    async def flush(self) -> None:
+        async with self._lock:
+            if self._ws is not None:
+                try:
+                    async with asyncio.timeout(1):
+                        while (stale := await self._ws.recv()) is not None:
+                            pass
+                except TimeoutError:
+                    pass
+        return
+
     async def reward(
         self,
         rewards_h: list[float] | tuple[float, ...] = (1.0,),
