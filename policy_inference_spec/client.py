@@ -32,7 +32,6 @@ from policy_inference_spec.protocol import (
     JOINT_STATE_KEY,
     PREV_SKIPPED_ACTION_START_KEY,
     REWARD_KEY,
-    SKIPPED_ACTION_START_KEY,
     SUBTASK_KEY,
     TASK_KEY,
     ServerFeature,
@@ -217,6 +216,7 @@ class RemotePolicyClient:
         wire_frame: dict[str, Any],
         *,
         reward: float | None = None,
+        prev_skipped_action_start: int | None = None,
     ) -> RemotePolicyPrediction:
         try:
             await self._ensure_ws()
@@ -229,6 +229,8 @@ class RemotePolicyClient:
                     LOGGER.warning(
                         "Dropping reward because server does not advertise %s support", ServerFeature.REWARDS
                     )
+            if prev_skipped_action_start is not None:
+                wire_frame[PREV_SKIPPED_ACTION_START_KEY] = int(prev_skipped_action_start)
             validate_wire_inference_request_frame(wire_frame)
             self._warn_on_camera_name_mismatch(wire_frame)
             payload = serialize_to_msgpack(wire_frame)
@@ -277,16 +279,12 @@ class RemotePolicyClient:
         task: str | None = None,
         subtask: str | None = None,
         action_chunk_hd: npt.NDArray[np.float32],
-        skipped_action_start_idx: int | None = None,
         prev_skipped_action_start: int | None = None,
     ) -> dict[str, Any]:
         """Record an intervention chunk.
 
-        `reward` is retrospective: the server applies it to the latest chunk
-        already recorded for this websocket client before recording this new
-        intervention chunk. `prev_skipped_action_start` is also retrospective
-        and marks where the previous chunk stopped executing when intervention
-        control took over.
+        `prev_skipped_action_start` is retrospective and marks where the
+        previous chunk stopped executing before this request.
         """
         try:
             await self._ensure_ws()
@@ -301,8 +299,6 @@ class RemotePolicyClient:
                 wire_frame[TASK_KEY] = str(task)
             if subtask is not None:
                 wire_frame[SUBTASK_KEY] = str(subtask)
-            if skipped_action_start_idx is not None:
-                wire_frame[SKIPPED_ACTION_START_KEY] = int(skipped_action_start_idx)
             if prev_skipped_action_start is not None:
                 wire_frame[PREV_SKIPPED_ACTION_START_KEY] = int(prev_skipped_action_start)
             if reward is not None:

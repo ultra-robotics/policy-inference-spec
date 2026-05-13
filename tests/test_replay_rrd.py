@@ -261,7 +261,11 @@ async def test_predict_sample_adds_unpadded_action_prefix(monkeypatch: pytest.Mo
         async def predict(
             self,
             request: dict[str, object],
+            *,
+            reward: float | None = None,
+            prev_skipped_action_start: int | None = None,
         ) -> RemotePolicyPrediction:
+            del reward, prev_skipped_action_start
             captured["request"] = request
             captured[ACTION_PREFIX_KEY] = request.get(ACTION_PREFIX_KEY)
             captured[PREFIX_CHANGE_START_KEY] = request.get(PREFIX_CHANGE_START_KEY)

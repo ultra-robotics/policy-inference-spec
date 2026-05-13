@@ -19,7 +19,6 @@ OBSERVATION_ENV_KEY = "observation/env"
 ACTION_KEY = "action"
 ACTION_PREFIX_KEY = "action_prefix"
 PREFIX_CHANGE_START_KEY = "prefix_change_start"
-SKIPPED_ACTION_START_KEY = "skipped_action_start"
 PREV_SKIPPED_ACTION_START_KEY = "prev_skipped_action_start"
 
 # Request metadata keys
@@ -34,8 +33,7 @@ ENDPOINT_INTERVENTION = "intervention"
 ENDPOINT_RESET = "reset"
 ENDPOINT_TELEMETRY = "telemetry"
 
-# Reward and retrospective episode keys. Request rewards describe the chunk
-# recorded before the current request, not the action chunk in the request.
+# Reward and retrospective episode keys.
 REWARD_KEY = "reward"
 REWARD_DESCRIPTION_KEY = "description"
 DONE_KEY = "done"
@@ -191,7 +189,6 @@ __all__ = [
     "REWARD_DESCRIPTION_KEY",
     "REWARD_KEY",
     "SERVER_FEATURES_KEY",
-    "SKIPPED_ACTION_START_KEY",
     "STATUS_KEY",
     "SUBTASK_KEY",
     "TASK_KEY",
