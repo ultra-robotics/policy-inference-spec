@@ -10,30 +10,44 @@ import numpy.typing as npt
 
 DEFAULT_INFERENCE_SERVER_PORT = 18090
 
+# Observation payload keys
 JOINT_STATE_KEY = "observation/state"
 OBSERVATION_HIDDEN_KEY = "observation/hidden"
 OBSERVATION_ENV_KEY = "observation/env"
+
+# Action payload keys
 ACTION_KEY = "action"
-INFERENCE_TIME_KEY = "inference_time"
-ENDPOINT_KEY = "endpoint"
-ENDPOINT_RESET = "reset"
-ENDPOINT_TELEMETRY = "telemetry"
-MODEL_ID_KEY = "model_id"
-POLICY_ID_KEY = "policy_id"
-REWARD_KEY = "reward"
 ACTION_PREFIX_KEY = "action_prefix"
 PREFIX_CHANGE_START_KEY = "prefix_change_start"
-REWARD_DESCRIPTION_KEY = "description"
-DONE_KEY = "done"
+SKIPPED_ACTION_START_IDX_KEY = "skipped_action_start_idx"
+
+# Request metadata keys
+MODEL_ID_KEY = "model_id"
+POLICY_ID_KEY = "policy_id"
 TASK_KEY = "task"
 SUBTASK_KEY = "subtask"
 
+# Endpoint keys and values
+ENDPOINT_KEY = "endpoint"
+ENDPOINT_INTERVENTION = "intervention"
+ENDPOINT_RESET = "reset"
+ENDPOINT_TELEMETRY = "telemetry"
+
+# Reward and episode keys
+REWARD_KEY = "reward"
+REWARD_DESCRIPTION_KEY = "description"
+DONE_KEY = "done"
+
+# Server handshake keys
 CAMERA_NAMES_KEY = "camera_names"
 IMAGE_RESOLUTION_KEY = "image_resolution"
 ACTION_SPACE_KEY = "action_space"
 NEEDS_WRIST_CAMERA_KEY = "needs_wrist_camera"
 N_EXTERNAL_CAMERAS_KEY = "n_external_cameras"
 SERVER_FEATURES_KEY = "server_features"
+
+# Response status keys
+INFERENCE_TIME_KEY = "inference_time"
 STATUS_KEY = "status"
 ERROR_KEY = "error"
 
@@ -46,6 +60,7 @@ ProtocolPayload: TypeAlias = dict[str, ProtocolValue]
 
 class ServerFeature(StrEnum):
     REWARDS = "rewards"
+    HUMAN_INTERVENTIONS = "human_interventions"
 
 
 def _normalize_server_features(features: Iterable[str | ServerFeature]) -> tuple[str, ...]:
@@ -151,6 +166,7 @@ __all__ = [
     "CAMERA_NAMES_KEY",
     "DEFAULT_INFERENCE_SERVER_PORT",
     "ENDPOINT_KEY",
+    "ENDPOINT_INTERVENTION",
     "ENDPOINT_RESET",
     "ENDPOINT_TELEMETRY",
     "ERROR_KEY",
@@ -172,6 +188,7 @@ __all__ = [
     "REWARD_DESCRIPTION_KEY",
     "REWARD_KEY",
     "SERVER_FEATURES_KEY",
+    "SKIPPED_ACTION_START_IDX_KEY",
     "STATUS_KEY",
     "SUBTASK_KEY",
     "TASK_KEY",

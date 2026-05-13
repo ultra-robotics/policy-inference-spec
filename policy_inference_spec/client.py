@@ -19,14 +19,21 @@ from policy_inference_spec.client_helpers import (
     policy_ws_url,
 )
 from policy_inference_spec.codec import deserialize_from_msgpack, encode_image, serialize_to_msgpack
-from policy_inference_spec.hardware_model import validate_wire_inference_request_frame, validate_wire_inference_response
+from policy_inference_spec.hardware_model import (
+    validate_wire_inference_request_frame,
+    validate_wire_inference_response,
+    validate_wire_intervention_request_frame,
+)
 from policy_inference_spec.protocol import (
     ACTION_KEY,
     ACTION_PREFIX_KEY,
+    ENDPOINT_INTERVENTION,
+    ENDPOINT_KEY,
     INFERENCE_TIME_KEY,
     JOINT_STATE_KEY,
     PREFIX_CHANGE_START_KEY,
     REWARD_KEY,
+    SKIPPED_ACTION_START_IDX_KEY,
     ServerFeature,
     ServerHandshake,
 )
@@ -199,6 +206,11 @@ class RemotePolicyClient:
         await self._close_ws()
         raise InferenceServiceRestartedError("Inference service restarted during prediction") from exc
 
+    async def supports_server_feature(self, feature: str | ServerFeature) -> bool:
+        await self._ensure_ws()
+        assert self._server_config is not None
+        return self._server_config.supports(feature)
+
     async def predict(
         self,
         wire_frame: dict[str, Any],
@@ -253,6 +265,49 @@ class RemotePolicyClient:
             total_latency_ms=total_latency_ms,
             policy_id=policy_id_used,
         )
+
+    async def record_human_intervention(
+        self,
+        wire_frame: dict[str, Any],
+        *,
+        reward: float | None = None,
+        action_chunk_hd: npt.NDArray[np.float32],
+        skipped_action_start_idx: int | None = None,
+    ) -> dict[str, Any]:
+        try:
+            await self._ensure_ws()
+            assert self._server_config is not None
+            assert self._server_config.supports(ServerFeature.HUMAN_INTERVENTIONS), (
+                f"server does not advertise {ServerFeature.HUMAN_INTERVENTIONS} support"
+            )
+            wire_frame = self._encode_wire_frame_images(wire_frame)
+            wire_frame[ENDPOINT_KEY] = ENDPOINT_INTERVENTION
+            wire_frame[ACTION_KEY] = np.asarray(action_chunk_hd, dtype=np.float32)
+            if skipped_action_start_idx is not None:
+                wire_frame[SKIPPED_ACTION_START_IDX_KEY] = int(skipped_action_start_idx)
+            if reward is not None:
+                if self._server_config.supports(ServerFeature.REWARDS):
+                    wire_frame[REWARD_KEY] = float(reward)
+                else:
+                    LOGGER.warning("Dropping reward because server does not advertise %s support", ServerFeature.REWARDS)
+            validate_wire_intervention_request_frame(wire_frame)
+            self._warn_on_camera_name_mismatch(wire_frame)
+            payload = serialize_to_msgpack(wire_frame)
+            async with self._lock:
+                assert self._ws is not None
+                await self._ws.send(payload)
+                response_raw = await self._ws.recv()
+        except websockets.ConnectionClosedError as exc:
+            await self._raise_if_service_restarted(exc)
+
+        if isinstance(response_raw, str):
+            _emit_server_error_verbatim(response_raw)
+            raise AssertionError("unexpected text response from inference server")
+        result = deserialize_from_msgpack(response_raw)
+        _emit_server_error_verbatim(result)
+        assert isinstance(result, dict), f"unexpected response type {type(result)}"
+        assert "error" not in result, f"unexpected error payload: {_summarize_server_payload(result)}"
+        return result
 
 
 __all__ = [

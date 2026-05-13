@@ -11,6 +11,7 @@ import numpy.typing as npt
 from policy_inference_spec.protocol import (
     ACTION_KEY,
     ACTION_PREFIX_KEY,
+    ENDPOINT_INTERVENTION,
     ENDPOINT_KEY,
     INFERENCE_TIME_KEY,
     JOINT_STATE_KEY,
@@ -20,6 +21,7 @@ from policy_inference_spec.protocol import (
     POLICY_ID_KEY,
     PREFIX_CHANGE_START_KEY,
     REWARD_KEY,
+    SKIPPED_ACTION_START_IDX_KEY,
     SUBTASK_KEY,
     TASK_KEY,
     ServerFeature,
@@ -253,6 +255,37 @@ def validate_wire_inference_request_frame(
     return hardware_model
 
 
+def validate_wire_intervention_request_frame(
+    frame: dict[str, Any], hardware_model: HardwareModel = DEFAULT_HARDWARE_MODEL
+) -> HardwareModel:
+    assert frame.get(ENDPOINT_KEY) == ENDPOINT_INTERVENTION, (
+        f"intervention frame must contain {ENDPOINT_KEY}={ENDPOINT_INTERVENTION!r}"
+    )
+    inference_frame = {
+        key: value
+        for key, value in frame.items()
+        if key not in {ENDPOINT_KEY, ACTION_KEY, SKIPPED_ACTION_START_IDX_KEY}
+    }
+    validate_wire_inference_request_frame(inference_frame, hardware_model)
+
+    action_chunk = frame.get(ACTION_KEY)
+    assert isinstance(action_chunk, np.ndarray), f"{ACTION_KEY} must be ndarray"
+    assert action_chunk.ndim == 2, f"{ACTION_KEY} must be 2-D, got {action_chunk.shape}"
+    assert action_chunk.shape[0] > 0, f"{ACTION_KEY} must contain at least one action, got {action_chunk.shape}"
+    assert action_chunk.shape[1] == hardware_model.action_dim, (
+        f"{ACTION_KEY} second dim must be {hardware_model.action_dim}, got {action_chunk.shape}"
+    )
+    assert np.issubdtype(action_chunk.dtype, np.floating), f"{ACTION_KEY} must be floating ndarray"
+
+    if SKIPPED_ACTION_START_IDX_KEY in frame:
+        skipped_action_start_idx = frame[SKIPPED_ACTION_START_IDX_KEY]
+        assert isinstance(skipped_action_start_idx, int), f"{SKIPPED_ACTION_START_IDX_KEY} must be int"
+        assert 0 <= skipped_action_start_idx < action_chunk.shape[0], (
+            f"{SKIPPED_ACTION_START_IDX_KEY} must be in [0, {action_chunk.shape[0]}), got {skipped_action_start_idx}"
+        )
+    return hardware_model
+
+
 def validate_wire_inference_response(
     result: dict[str, Any],
     hardware_model: HardwareModel = DEFAULT_HARDWARE_MODEL,
@@ -282,5 +315,6 @@ __all__ = [
     "server_handshake_for_hardware_model",
     "validate_ultra_arrays_for_hardware_model",
     "validate_wire_inference_request_frame",
+    "validate_wire_intervention_request_frame",
     "validate_wire_inference_response",
 ]
