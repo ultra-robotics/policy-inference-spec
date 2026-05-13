@@ -30,6 +30,7 @@ from policy_inference_spec.protocol import (
     ENDPOINT_KEY,
     INFERENCE_TIME_KEY,
     JOINT_STATE_KEY,
+    PREV_SKIPPED_ACTION_START_KEY,
     REWARD_KEY,
     SKIPPED_ACTION_START_KEY,
     SUBTASK_KEY,
@@ -277,7 +278,16 @@ class RemotePolicyClient:
         subtask: str | None = None,
         action_chunk_hd: npt.NDArray[np.float32],
         skipped_action_start_idx: int | None = None,
+        prev_skipped_action_start: int | None = None,
     ) -> dict[str, Any]:
+        """Record an intervention chunk.
+
+        `reward` is retrospective: the server applies it to the latest chunk
+        already recorded for this websocket client before recording this new
+        intervention chunk. `prev_skipped_action_start` is also retrospective
+        and marks where the previous chunk stopped executing when intervention
+        control took over.
+        """
         try:
             await self._ensure_ws()
             assert self._server_config is not None
@@ -293,6 +303,8 @@ class RemotePolicyClient:
                 wire_frame[SUBTASK_KEY] = str(subtask)
             if skipped_action_start_idx is not None:
                 wire_frame[SKIPPED_ACTION_START_KEY] = int(skipped_action_start_idx)
+            if prev_skipped_action_start is not None:
+                wire_frame[PREV_SKIPPED_ACTION_START_KEY] = int(prev_skipped_action_start)
             if reward is not None:
                 wire_frame[REWARD_KEY] = float(reward)
             validate_wire_intervention_request_frame(wire_frame)

@@ -19,6 +19,7 @@ from policy_inference_spec.protocol import (
     OBSERVATION_ENV_KEY,
     OBSERVATION_HIDDEN_KEY,
     POLICY_ID_KEY,
+    PREV_SKIPPED_ACTION_START_KEY,
     PREFIX_CHANGE_START_KEY,
     REWARD_KEY,
     SKIPPED_ACTION_START_KEY,
@@ -264,7 +265,7 @@ def validate_wire_intervention_request_frame(
     inference_frame = {
         key: value
         for key, value in frame.items()
-        if key not in {ENDPOINT_KEY, ACTION_KEY, SKIPPED_ACTION_START_KEY}
+        if key not in {ENDPOINT_KEY, ACTION_KEY, SKIPPED_ACTION_START_KEY, PREV_SKIPPED_ACTION_START_KEY}
     }
     validate_wire_inference_request_frame(inference_frame, hardware_model)
 
@@ -282,6 +283,12 @@ def validate_wire_intervention_request_frame(
         assert isinstance(skipped_action_start_idx, int), f"{SKIPPED_ACTION_START_KEY} must be int"
         assert 0 <= skipped_action_start_idx < action_chunk.shape[0], (
             f"{SKIPPED_ACTION_START_KEY} must be in [0, {action_chunk.shape[0]}), got {skipped_action_start_idx}"
+        )
+    if PREV_SKIPPED_ACTION_START_KEY in frame:
+        prev_skipped_action_start = frame[PREV_SKIPPED_ACTION_START_KEY]
+        assert isinstance(prev_skipped_action_start, int), f"{PREV_SKIPPED_ACTION_START_KEY} must be int"
+        assert 0 <= prev_skipped_action_start < action_chunk.shape[0], (
+            f"{PREV_SKIPPED_ACTION_START_KEY} must be in [0, {action_chunk.shape[0]}), got {prev_skipped_action_start}"
         )
     return hardware_model
 

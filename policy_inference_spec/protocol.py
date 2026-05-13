@@ -20,6 +20,7 @@ ACTION_KEY = "action"
 ACTION_PREFIX_KEY = "action_prefix"
 PREFIX_CHANGE_START_KEY = "prefix_change_start"
 SKIPPED_ACTION_START_KEY = "skipped_action_start"
+PREV_SKIPPED_ACTION_START_KEY = "prev_skipped_action_start"
 
 # Request metadata keys
 MODEL_ID_KEY = "model_id"
@@ -33,7 +34,8 @@ ENDPOINT_INTERVENTION = "intervention"
 ENDPOINT_RESET = "reset"
 ENDPOINT_TELEMETRY = "telemetry"
 
-# Reward and episode keys
+# Reward and retrospective episode keys. Request rewards describe the chunk
+# recorded before the current request, not the action chunk in the request.
 REWARD_KEY = "reward"
 REWARD_DESCRIPTION_KEY = "description"
 DONE_KEY = "done"
@@ -182,6 +184,7 @@ __all__ = [
     "N_EXTERNAL_CAMERAS_KEY",
     "NEEDS_WRIST_CAMERA_KEY",
     "POLICY_ID_KEY",
+    "PREV_SKIPPED_ACTION_START_KEY",
     "PREFIX_CHANGE_START_KEY",
     "ProtocolPayload",
     "ProtocolValue",
