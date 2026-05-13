@@ -33,7 +33,7 @@ from policy_inference_spec.protocol import (
     JOINT_STATE_KEY,
     PREFIX_CHANGE_START_KEY,
     REWARD_KEY,
-    SKIPPED_ACTION_START_IDX_KEY,
+    SKIPPED_ACTION_START_KEY,
     ServerFeature,
     ServerHandshake,
 )
@@ -284,12 +284,9 @@ class RemotePolicyClient:
             wire_frame[ENDPOINT_KEY] = ENDPOINT_INTERVENTION
             wire_frame[ACTION_KEY] = np.asarray(action_chunk_hd, dtype=np.float32)
             if skipped_action_start_idx is not None:
-                wire_frame[SKIPPED_ACTION_START_IDX_KEY] = int(skipped_action_start_idx)
+                wire_frame[SKIPPED_ACTION_START_KEY] = int(skipped_action_start_idx)
             if reward is not None:
-                if self._server_config.supports(ServerFeature.REWARDS):
-                    wire_frame[REWARD_KEY] = float(reward)
-                else:
-                    LOGGER.warning("Dropping reward because server does not advertise %s support", ServerFeature.REWARDS)
+                wire_frame[REWARD_KEY] = float(reward)
             validate_wire_intervention_request_frame(wire_frame)
             self._warn_on_camera_name_mismatch(wire_frame)
             payload = serialize_to_msgpack(wire_frame)

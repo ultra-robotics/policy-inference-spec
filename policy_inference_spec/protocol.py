@@ -19,7 +19,7 @@ OBSERVATION_ENV_KEY = "observation/env"
 ACTION_KEY = "action"
 ACTION_PREFIX_KEY = "action_prefix"
 PREFIX_CHANGE_START_KEY = "prefix_change_start"
-SKIPPED_ACTION_START_IDX_KEY = "skipped_action_start_idx"
+SKIPPED_ACTION_START_KEY = "skipped_action_start"
 
 # Request metadata keys
 MODEL_ID_KEY = "model_id"
@@ -188,7 +188,7 @@ __all__ = [
     "REWARD_DESCRIPTION_KEY",
     "REWARD_KEY",
     "SERVER_FEATURES_KEY",
-    "SKIPPED_ACTION_START_IDX_KEY",
+    "SKIPPED_ACTION_START_KEY",
     "STATUS_KEY",
     "SUBTASK_KEY",
     "TASK_KEY",
