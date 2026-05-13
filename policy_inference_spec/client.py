@@ -26,14 +26,14 @@ from policy_inference_spec.hardware_model import (
 )
 from policy_inference_spec.protocol import (
     ACTION_KEY,
-    ACTION_PREFIX_KEY,
     ENDPOINT_INTERVENTION,
     ENDPOINT_KEY,
     INFERENCE_TIME_KEY,
     JOINT_STATE_KEY,
-    PREFIX_CHANGE_START_KEY,
     REWARD_KEY,
     SKIPPED_ACTION_START_KEY,
+    SUBTASK_KEY,
+    TASK_KEY,
     ServerFeature,
     ServerHandshake,
 )
@@ -225,7 +225,9 @@ class RemotePolicyClient:
                 if self._server_config.supports(ServerFeature.REWARDS):
                     wire_frame[REWARD_KEY] = float(reward)
                 else:
-                    LOGGER.warning("Dropping reward because server does not advertise %s support", ServerFeature.REWARDS)
+                    LOGGER.warning(
+                        "Dropping reward because server does not advertise %s support", ServerFeature.REWARDS
+                    )
             validate_wire_inference_request_frame(wire_frame)
             self._warn_on_camera_name_mismatch(wire_frame)
             payload = serialize_to_msgpack(wire_frame)
@@ -271,6 +273,8 @@ class RemotePolicyClient:
         wire_frame: dict[str, Any],
         *,
         reward: float | None = None,
+        task: str | None = None,
+        subtask: str | None = None,
         action_chunk_hd: npt.NDArray[np.float32],
         skipped_action_start_idx: int | None = None,
     ) -> dict[str, Any]:
@@ -283,6 +287,10 @@ class RemotePolicyClient:
             wire_frame = self._encode_wire_frame_images(wire_frame)
             wire_frame[ENDPOINT_KEY] = ENDPOINT_INTERVENTION
             wire_frame[ACTION_KEY] = np.asarray(action_chunk_hd, dtype=np.float32)
+            if task is not None:
+                wire_frame[TASK_KEY] = str(task)
+            if subtask is not None:
+                wire_frame[SUBTASK_KEY] = str(subtask)
             if skipped_action_start_idx is not None:
                 wire_frame[SKIPPED_ACTION_START_KEY] = int(skipped_action_start_idx)
             if reward is not None:
