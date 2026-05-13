@@ -19,7 +19,7 @@ OBSERVATION_ENV_KEY = "observation/env"
 ACTION_KEY = "action"
 ACTION_PREFIX_KEY = "action_prefix"
 PREFIX_CHANGE_START_KEY = "prefix_change_start"
-SKIPPED_ACTION_START_KEY = "skipped_action_start"
+PREV_SKIPPED_ACTION_START_KEY = "prev_skipped_action_start"
 
 # Request metadata keys
 MODEL_ID_KEY = "model_id"
@@ -33,7 +33,7 @@ ENDPOINT_INTERVENTION = "intervention"
 ENDPOINT_RESET = "reset"
 ENDPOINT_TELEMETRY = "telemetry"
 
-# Reward and episode keys
+# Reward and retrospective episode keys.
 REWARD_KEY = "reward"
 REWARD_DESCRIPTION_KEY = "description"
 DONE_KEY = "done"
@@ -182,13 +182,13 @@ __all__ = [
     "N_EXTERNAL_CAMERAS_KEY",
     "NEEDS_WRIST_CAMERA_KEY",
     "POLICY_ID_KEY",
+    "PREV_SKIPPED_ACTION_START_KEY",
     "PREFIX_CHANGE_START_KEY",
     "ProtocolPayload",
     "ProtocolValue",
     "REWARD_DESCRIPTION_KEY",
     "REWARD_KEY",
     "SERVER_FEATURES_KEY",
-    "SKIPPED_ACTION_START_KEY",
     "STATUS_KEY",
     "SUBTASK_KEY",
     "TASK_KEY",
