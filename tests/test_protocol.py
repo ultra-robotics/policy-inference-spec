@@ -17,6 +17,7 @@ from policy_inference_spec.protocol import (
     JOINT_STATE_KEY,
     MODEL_ID_KEY,
     REWARD_KEY,
+    START_METADATA_KEY,
     SUBTASK_KEY,
     TASK_KEY,
     ServerFeature,
@@ -137,6 +138,24 @@ def test_validate_wire_inference_request_frame_accepts_scalar_reward() -> None:
     validate_wire_inference_request_frame(payload)
 
 
+def test_validate_wire_inference_request_frame_accepts_start_metadata() -> None:
+    payload: ProtocolPayload = {
+        JOINT_STATE_KEY: np.zeros(DEFAULT_HARDWARE_MODEL.state_dim, dtype=np.float32),
+        TASK_KEY: "bulk_shipping",
+        SUBTASK_KEY: "pick_item",
+        START_METADATA_KEY: {
+            "item_index": 2,
+            "pick_location": "table",
+            "nested": {"drop_off_location": "Blue Bin"},
+        },
+        MODEL_ID_KEY: "",
+    }
+    for camera in DEFAULT_HARDWARE_MODEL.cameras:
+        payload[f"observation/{camera}"] = np.zeros(DEFAULT_HARDWARE_MODEL.image_resolution + (3,), dtype=np.uint8)
+
+    validate_wire_inference_request_frame(payload)
+
+
 def test_validate_wire_inference_request_frame_rejects_non_numeric_reward() -> None:
     payload: ProtocolPayload = {
         JOINT_STATE_KEY: np.zeros(DEFAULT_HARDWARE_MODEL.state_dim, dtype=np.float32),
@@ -149,4 +168,19 @@ def test_validate_wire_inference_request_frame_rejects_non_numeric_reward() -> N
         payload[f"observation/{camera}"] = np.zeros(DEFAULT_HARDWARE_MODEL.image_resolution + (3,), dtype=np.uint8)
 
     with pytest.raises(AssertionError, match=REWARD_KEY):
+        validate_wire_inference_request_frame(payload)
+
+
+def test_validate_wire_inference_request_frame_rejects_non_json_start_metadata() -> None:
+    payload: ProtocolPayload = {
+        JOINT_STATE_KEY: np.zeros(DEFAULT_HARDWARE_MODEL.state_dim, dtype=np.float32),
+        TASK_KEY: "bulk_shipping",
+        SUBTASK_KEY: "pick_item",
+        START_METADATA_KEY: {"bad": object()},
+        MODEL_ID_KEY: "",
+    }
+    for camera in DEFAULT_HARDWARE_MODEL.cameras:
+        payload[f"observation/{camera}"] = np.zeros(DEFAULT_HARDWARE_MODEL.image_resolution + (3,), dtype=np.uint8)
+
+    with pytest.raises(AssertionError, match=START_METADATA_KEY):
         validate_wire_inference_request_frame(payload)

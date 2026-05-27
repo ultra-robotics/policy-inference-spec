@@ -22,6 +22,7 @@ from policy_inference_spec.protocol import (
     PREV_SKIPPED_ACTION_START_KEY,
     PREFIX_CHANGE_START_KEY,
     REWARD_KEY,
+    START_METADATA_KEY,
     SUBTASK_KEY,
     TASK_KEY,
     ServerFeature,
@@ -141,10 +142,26 @@ def _optional_wire_inference_request_keys() -> frozenset[str]:
             OBSERVATION_HIDDEN_KEY,
             PREV_SKIPPED_ACTION_START_KEY,
             REWARD_KEY,
+            START_METADATA_KEY,
             TASK_KEY,
             SUBTASK_KEY,
         }
     )
+
+
+def _validate_inference_metadata_value(value: Any, *, key: str) -> None:
+    if value is None or isinstance(value, str | int | float | bool):
+        return
+    if isinstance(value, list):
+        for index, item in enumerate(value):
+            _validate_inference_metadata_value(item, key=f"{key}[{index}]")
+        return
+    if isinstance(value, dict):
+        for child_key, child_value in value.items():
+            assert isinstance(child_key, str), f"{key} keys must be str"
+            _validate_inference_metadata_value(child_value, key=f"{key}.{child_key}")
+        return
+    raise AssertionError(f"{key} must contain JSON-like metadata, got {type(value)}")
 
 
 def server_handshake_for_hardware_model(
@@ -203,6 +220,10 @@ def validate_wire_inference_request_frame(
     assert isinstance(frame[MODEL_ID_KEY], str), f"{MODEL_ID_KEY} must be str"
     if REWARD_KEY in frame:
         assert isinstance(frame[REWARD_KEY], (int, float)), f"{REWARD_KEY} must be numeric"
+    if START_METADATA_KEY in frame:
+        start_metadata = frame[START_METADATA_KEY]
+        assert isinstance(start_metadata, dict), f"{START_METADATA_KEY} must be dict"
+        _validate_inference_metadata_value(start_metadata, key=START_METADATA_KEY)
     if PREV_SKIPPED_ACTION_START_KEY in frame:
         prev_skipped_action_start = frame[PREV_SKIPPED_ACTION_START_KEY]
         assert isinstance(prev_skipped_action_start, int), f"{PREV_SKIPPED_ACTION_START_KEY} must be int"

@@ -31,6 +31,7 @@ from policy_inference_spec.protocol import (
     PREFIX_CHANGE_START_KEY,
     POLICY_ID_KEY,
     REWARD_KEY,
+    START_METADATA_KEY,
     SUBTASK_KEY,
     TASK_KEY,
     ServerFeature,
@@ -181,6 +182,36 @@ async def test_predict_includes_prev_skipped_action_start() -> None:
     assert await_args is not None
     sent_payload = deserialize_from_msgpack(await_args.args[0])
     assert sent_payload[PREV_SKIPPED_ACTION_START_KEY] == 6
+
+
+@pytest.mark.asyncio
+async def test_predict_preserves_start_metadata() -> None:
+    cfg = serialize_to_msgpack(_server_handshake_payload())
+    resp = serialize_to_msgpack(
+        {
+            ACTION_KEY: np.zeros((1, DEFAULT_HARDWARE_MODEL.action_dim), dtype=np.float32),
+            POLICY_ID_KEY: "policy-1",
+        }
+    )
+    ws_mock = MagicMock()
+    ws_mock.recv = AsyncMock(side_effect=[cfg, resp])
+    ws_mock.send = AsyncMock()
+    ws_mock.close = AsyncMock()
+
+    async def fake_connect(*_a: object, **_kw: object) -> MagicMock:
+        return ws_mock
+
+    frame = _valid_wire_frame()
+    frame[START_METADATA_KEY] = {"item_index": 2, "pick_location": "table"}
+    with patch("policy_inference_spec.client.websockets.connect", side_effect=fake_connect):
+        client = RemotePolicyClient("ws://127.0.0.1:9/ws")
+        await client.predict(frame)
+        await client.aclose()
+
+    await_args = ws_mock.send.await_args
+    assert await_args is not None
+    sent_payload = deserialize_from_msgpack(await_args.args[0])
+    assert sent_payload[START_METADATA_KEY] == {"item_index": 2, "pick_location": "table"}
 
 
 @pytest.mark.asyncio
