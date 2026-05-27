@@ -52,15 +52,7 @@ INFERENCE_TIME_KEY = "inference_time"
 STATUS_KEY = "status"
 ERROR_KEY = "error"
 
-InferenceMetadataValue: TypeAlias = (
-    None
-    | str
-    | int
-    | float
-    | bool
-    | list["InferenceMetadataValue"]
-    | dict[str, "InferenceMetadataValue"]
-)
+InferenceMetadataValue: TypeAlias = None | str | int | float | bool | list[Any] | dict[str, Any]
 ImageArray: TypeAlias = npt.NDArray[np.uint8]
 FloatArray: TypeAlias = npt.NDArray[np.float32]
 ProtocolValue: TypeAlias = ImageArray | FloatArray | bytes | InferenceMetadataValue
