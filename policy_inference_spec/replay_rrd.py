@@ -157,8 +157,11 @@ class RerunReplayer:
             sample = next(stream_iter)
             dataframe = sample.to_pyarrow().to_pandas()
             for row in dataframe.to_dict(orient="records"):
-                data = self._decode_frames({key: value for key, value in row.items() if not _is_null(value)})
-                most_recent_sample.update(data)
+                try:
+                    data = self._decode_frames({key: value for key, value in row.items() if not _is_null(value)})
+                    most_recent_sample.update(data)
+                except AssertionError as e:
+                    print(f"failed one sample: {e}")
 
         LOGGER.info("All streams populated at %s", most_recent_sample["ts"])
         next_publish_ts = most_recent_sample["ts"] + pd.Timedelta(seconds=1 / self.publish_hz)
@@ -167,7 +170,11 @@ class RerunReplayer:
         for sample in stream:
             dataframe = sample.to_pyarrow().to_pandas()
             for row in dataframe.to_dict(orient="records"):
-                data = self._decode_frames({key: value for key, value in row.items() if not _is_null(value)})
+                try:
+                    data = self._decode_frames({key: value for key, value in row.items() if not _is_null(value)})
+                except:
+                    print(f"Failed to decode a frame. skipping.")
+                    continue
                 while data["ts"] > next_sample_ts:
                     last_samples.append(most_recent_sample.copy())
                     next_sample_ts = next_sample_ts + pd.Timedelta(seconds=1 / self.hz)

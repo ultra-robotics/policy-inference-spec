@@ -26,6 +26,7 @@ MODEL_ID_KEY = "model_id"
 POLICY_ID_KEY = "policy_id"
 TASK_KEY = "task"
 SUBTASK_KEY = "subtask"
+START_METADATA_KEY = "start_metadata"
 
 # Endpoint keys and values
 ENDPOINT_KEY = "endpoint"
@@ -51,7 +52,7 @@ INFERENCE_TIME_KEY = "inference_time"
 STATUS_KEY = "status"
 ERROR_KEY = "error"
 
-InferenceMetadataValue: TypeAlias = str | int | float | bool | list[str] | list[int] | list[float]
+InferenceMetadataValue: TypeAlias = None | str | int | float | bool | list[Any] | dict[str, Any]
 ImageArray: TypeAlias = npt.NDArray[np.uint8]
 FloatArray: TypeAlias = npt.NDArray[np.float32]
 ProtocolValue: TypeAlias = ImageArray | FloatArray | bytes | InferenceMetadataValue
@@ -188,6 +189,7 @@ __all__ = [
     "ProtocolValue",
     "REWARD_DESCRIPTION_KEY",
     "REWARD_KEY",
+    "START_METADATA_KEY",
     "SERVER_FEATURES_KEY",
     "STATUS_KEY",
     "SUBTASK_KEY",
