@@ -124,11 +124,10 @@ class RemotePolicyClient:
     def _encode_wire_frame_images(self, wire_frame: dict[str, Any]) -> dict[str, Any]:
         adapted = dict(wire_frame)
         for key, value in wire_frame.items():
-            if not key.startswith("observation/") or key == JOINT_STATE_KEY:
+            if not key.startswith("observation/") or key == JOINT_STATE_KEY or isinstance(value, bytes):
                 continue
-            if isinstance(value, bytes):
-                continue
-            field = encode_image(_wire_image_to_hwc_uint8(value), jpeg_quality=75)
+            image = _wire_image_to_hwc_uint8(value)
+            field = encode_image(image, jpeg_quality=75)
             assert field.codec == "jpeg", f"{key} must use jpeg transport"
             adapted[key] = field.data
         return adapted
@@ -140,7 +139,7 @@ class RemotePolicyClient:
         if self._ws is not None:
             await self._close_ws()
         async with self._lock:
-            self._ws = await websockets.connect(uri, additional_headers=self._headers())
+            self._ws = await websockets.connect(uri, additional_headers=self._headers(), compression=None)
             self._connected_url = uri
             first = await self._ws.recv()
         assert isinstance(first, bytes), type(first)
