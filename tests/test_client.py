@@ -114,7 +114,7 @@ async def test_predict_round_trip_with_mock_websocket() -> None:
         return ws_mock
 
     frame = _valid_wire_frame()
-    with patch("policy_inference_spec.client.websockets.connect", side_effect=fake_connect):
+    with patch("policy_inference_spec.client.websockets.connect", side_effect=fake_connect) as connect_mock:
         client = RemotePolicyClient("ws://127.0.0.1:9/ws")
         pred = await client.predict(frame)
         await client.aclose()
@@ -125,7 +125,8 @@ async def test_predict_round_trip_with_mock_websocket() -> None:
     assert pred.total_latency_ms >= 0.0
     ws_mock.send.assert_called_once()
     assert ws_mock.recv.call_count == 2
-
+    assert connect_mock.call_args is not None
+    assert connect_mock.call_args.kwargs["compression"] is None
 
 @pytest.mark.asyncio
 async def test_predict_includes_reward_when_server_supports_rewards() -> None:
