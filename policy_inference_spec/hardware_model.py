@@ -11,6 +11,7 @@ import numpy.typing as npt
 from policy_inference_spec.protocol import (
     ACTION_KEY,
     ACTION_PREFIX_KEY,
+    CONDITIONING_METADATA_KEY,
     ENDPOINT_INTERVENTION,
     ENDPOINT_KEY,
     INFERENCE_TIME_KEY,
@@ -143,6 +144,7 @@ def _optional_wire_inference_request_keys() -> frozenset[str]:
             PREV_SKIPPED_ACTION_START_KEY,
             REWARD_KEY,
             START_METADATA_KEY,
+            CONDITIONING_METADATA_KEY,
             TASK_KEY,
             SUBTASK_KEY,
         }
@@ -210,12 +212,14 @@ def validate_wire_inference_request_frame(
     allowed = required | _optional_wire_inference_request_keys()
     keys = set(frame.keys())
     assert required <= keys <= allowed, f"wire inference keys {keys} must include {required} and stay within {allowed}"
-    
+
     assert isinstance(frame[TASK_KEY], str), f"{TASK_KEY} must be str"
     assert isinstance(frame[SUBTASK_KEY], str), f"{SUBTASK_KEY} must be str"
     has_task = frame[TASK_KEY] != ""
     has_subtask = frame[SUBTASK_KEY] != ""
-    assert has_task == has_subtask, f"{TASK_KEY} and {SUBTASK_KEY} may either both take on values, or neither may have a value"
+    assert has_task == has_subtask, (
+        f"{TASK_KEY} and {SUBTASK_KEY} may either both take on values, or neither may have a value"
+    )
     expected_action_dim = hardware_model.action_dim
     assert isinstance(frame[MODEL_ID_KEY], str), f"{MODEL_ID_KEY} must be str"
     if REWARD_KEY in frame:
@@ -224,6 +228,10 @@ def validate_wire_inference_request_frame(
         start_metadata = frame[START_METADATA_KEY]
         assert isinstance(start_metadata, dict), f"{START_METADATA_KEY} must be dict"
         _validate_inference_metadata_value(start_metadata, key=START_METADATA_KEY)
+    if CONDITIONING_METADATA_KEY in frame:
+        conditioning_metadata = frame[CONDITIONING_METADATA_KEY]
+        assert isinstance(conditioning_metadata, dict), f"{CONDITIONING_METADATA_KEY} must be dict"
+        _validate_inference_metadata_value(conditioning_metadata, key=CONDITIONING_METADATA_KEY)
     if PREV_SKIPPED_ACTION_START_KEY in frame:
         prev_skipped_action_start = frame[PREV_SKIPPED_ACTION_START_KEY]
         assert isinstance(prev_skipped_action_start, int), f"{PREV_SKIPPED_ACTION_START_KEY} must be int"
@@ -336,6 +344,7 @@ def validate_wire_inference_response(
         assert isinstance(result[INFERENCE_TIME_KEY], (int, float)), "inference_time must be numeric"
     if POLICY_ID_KEY in result:
         assert isinstance(result[POLICY_ID_KEY], str), f"{POLICY_ID_KEY} must be str"
+
 
 __all__ = [
     "DEFAULT_HARDWARE_MODEL",

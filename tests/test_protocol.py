@@ -11,7 +11,7 @@ from beartype.roar import BeartypeCallHintParamViolation
 from policy_inference_spec.codec import NdarrayField, deserialize_from_msgpack, encode_image, serialize_to_msgpack
 from policy_inference_spec.protocol import (
     ACTION_KEY,
-    ENDPOINT_KEY,
+    CONDITIONING_METADATA_KEY,
     FloatArray,
     ProtocolPayload,
     JOINT_STATE_KEY,
@@ -23,7 +23,11 @@ from policy_inference_spec.protocol import (
     ServerFeature,
     ServerHandshake,
 )
-from policy_inference_spec.hardware_model import DEFAULT_HARDWARE_MODEL, validate_wire_inference_request_frame, validate_wire_inference_response
+from policy_inference_spec.hardware_model import (
+    DEFAULT_HARDWARE_MODEL,
+    validate_wire_inference_request_frame,
+    validate_wire_inference_response,
+)
 
 
 def test_serialize_to_msgpack_uses_flat_ndarray_tags() -> None:
@@ -156,6 +160,25 @@ def test_validate_wire_inference_request_frame_accepts_start_metadata() -> None:
     validate_wire_inference_request_frame(payload)
 
 
+def test_validate_wire_inference_request_frame_accepts_conditioning_metadata() -> None:
+    payload: ProtocolPayload = {
+        JOINT_STATE_KEY: np.zeros(DEFAULT_HARDWARE_MODEL.state_dim, dtype=np.float32),
+        TASK_KEY: "bulk_shipping",
+        SUBTASK_KEY: "pick_item",
+        CONDITIONING_METADATA_KEY: {
+            "operator_ldap": "operator",
+            "post_hoc_score": 4,
+            "mistake": "false",
+            "episode_length": 1200,
+        },
+        MODEL_ID_KEY: "",
+    }
+    for camera in DEFAULT_HARDWARE_MODEL.cameras:
+        payload[f"observation/{camera}"] = np.zeros(DEFAULT_HARDWARE_MODEL.image_resolution + (3,), dtype=np.uint8)
+
+    validate_wire_inference_request_frame(payload)
+
+
 def test_validate_wire_inference_request_frame_rejects_non_numeric_reward() -> None:
     payload: ProtocolPayload = {
         JOINT_STATE_KEY: np.zeros(DEFAULT_HARDWARE_MODEL.state_dim, dtype=np.float32),
@@ -183,4 +206,19 @@ def test_validate_wire_inference_request_frame_rejects_non_json_start_metadata()
         payload[f"observation/{camera}"] = np.zeros(DEFAULT_HARDWARE_MODEL.image_resolution + (3,), dtype=np.uint8)
 
     with pytest.raises(AssertionError, match=START_METADATA_KEY):
+        validate_wire_inference_request_frame(payload)
+
+
+def test_validate_wire_inference_request_frame_rejects_non_json_conditioning_metadata() -> None:
+    payload: ProtocolPayload = {
+        JOINT_STATE_KEY: np.zeros(DEFAULT_HARDWARE_MODEL.state_dim, dtype=np.float32),
+        TASK_KEY: "bulk_shipping",
+        SUBTASK_KEY: "pick_item",
+        CONDITIONING_METADATA_KEY: {"bad": object()},
+        MODEL_ID_KEY: "",
+    }
+    for camera in DEFAULT_HARDWARE_MODEL.cameras:
+        payload[f"observation/{camera}"] = np.zeros(DEFAULT_HARDWARE_MODEL.image_resolution + (3,), dtype=np.uint8)
+
+    with pytest.raises(AssertionError, match=CONDITIONING_METADATA_KEY):
         validate_wire_inference_request_frame(payload)
