@@ -27,6 +27,7 @@ POLICY_ID_KEY = "policy_id"
 TASK_KEY = "task"
 SUBTASK_KEY = "subtask"
 START_METADATA_KEY = "start_metadata"
+CONDITIONING_METADATA_KEY = "conditioning_metadata"
 
 # Endpoint keys and values
 ENDPOINT_KEY = "endpoint"
@@ -91,7 +92,9 @@ class ServerHandshake:
 
     def __post_init__(self) -> None:
         assert self.camera_names, "camera_names must not be empty"
-        assert all(isinstance(name, str) and name for name in self.camera_names), "camera_names must be non-empty strings"
+        assert all(isinstance(name, str) and name for name in self.camera_names), (
+            "camera_names must be non-empty strings"
+        )
         assert isinstance(self.action_space, str) and self.action_space, "action_space must be a non-empty string"
         assert isinstance(self.needs_wrist_camera, bool), "needs_wrist_camera must be bool"
         assert isinstance(self.n_external_cameras, int), "n_external_cameras must be int"
@@ -131,7 +134,9 @@ class ServerHandshake:
         assert isinstance(n_external_cameras, int), f"{N_EXTERNAL_CAMERAS_KEY} must be int"
         server_features_raw = payload.get(SERVER_FEATURES_KEY, [])
         assert isinstance(server_features_raw, list), f"{SERVER_FEATURES_KEY} must be list[str]"
-        assert all(isinstance(feature, str) for feature in server_features_raw), f"{SERVER_FEATURES_KEY} must be list[str]"
+        assert all(isinstance(feature, str) for feature in server_features_raw), (
+            f"{SERVER_FEATURES_KEY} must be list[str]"
+        )
         return cls(
             camera_names=tuple(camera_names_raw),
             image_resolution=image_resolution,
@@ -160,11 +165,13 @@ def make_server_handshake(
         server_features=_normalize_server_features(server_features),
     )
 
+
 __all__ = [
     "ACTION_KEY",
     "ACTION_PREFIX_KEY",
     "ACTION_SPACE_KEY",
     "CAMERA_NAMES_KEY",
+    "CONDITIONING_METADATA_KEY",
     "DEFAULT_INFERENCE_SERVER_PORT",
     "ENDPOINT_KEY",
     "ENDPOINT_INTERVENTION",
