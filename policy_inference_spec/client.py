@@ -27,6 +27,7 @@ from policy_inference_spec.hardware_model import (
 )
 from policy_inference_spec.protocol import (
     ACTION_KEY,
+    DONE_KEY,
     ENDPOINT_INTERVENTION,
     ENDPOINT_KEY,
     INFERENCE_TIME_KEY,
@@ -215,6 +216,7 @@ class RemotePolicyClient:
         wire_frame: dict[str, Any],
         *,
         reward: float | None = None,
+        done: bool = False,
         prev_skipped_action_start: int | None = None,
     ) -> RemotePolicyPrediction:
         try:
@@ -230,6 +232,8 @@ class RemotePolicyClient:
                     )
             if prev_skipped_action_start is not None:
                 wire_frame[PREV_SKIPPED_ACTION_START_KEY] = int(prev_skipped_action_start)
+            if done:
+                wire_frame[DONE_KEY] = True
             validate_wire_inference_request_frame(wire_frame)
             self._warn_on_camera_name_mismatch(wire_frame)
             payload = serialize_to_msgpack(wire_frame)
@@ -275,6 +279,7 @@ class RemotePolicyClient:
         wire_frame: dict[str, Any],
         *,
         reward: float | None = None,
+        done: bool = False,
         task: str | None = None,
         subtask: str | None = None,
         action_chunk_hd: npt.NDArray[np.float32],
@@ -302,6 +307,8 @@ class RemotePolicyClient:
                 wire_frame[PREV_SKIPPED_ACTION_START_KEY] = int(prev_skipped_action_start)
             if reward is not None:
                 wire_frame[REWARD_KEY] = float(reward)
+            if done:
+                wire_frame[DONE_KEY] = True
             validate_wire_intervention_request_frame(wire_frame)
             self._warn_on_camera_name_mismatch(wire_frame)
             payload = serialize_to_msgpack(wire_frame)
