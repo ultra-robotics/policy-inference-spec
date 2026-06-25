@@ -28,6 +28,8 @@ from policy_inference_spec.hardware_model import (
 from policy_inference_spec.protocol import (
     ACTION_KEY,
     DONE_KEY,
+    DONE_REASON_KEY,
+    ENDPOINT_DONE,
     ENDPOINT_INTERVENTION,
     ENDPOINT_KEY,
     INFERENCE_TIME_KEY,
@@ -41,6 +43,14 @@ from policy_inference_spec.protocol import (
 )
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _validate_done_reason(*, done: bool, done_reason: str | None) -> str | None:
+    if done:
+        assert isinstance(done_reason, str) and done_reason.strip(), "done_reason must be a non-empty str when done=True"
+        return done_reason.strip()
+    assert done_reason is None, "done_reason must be None when done=False"
+    return None
 
 
 def _wire_image_to_hwc_uint8(value: Any) -> npt.NDArray[np.uint8]:
@@ -217,8 +227,10 @@ class RemotePolicyClient:
         *,
         reward: float | None = None,
         done: bool = False,
+        done_reason: str | None = None,
         prev_skipped_action_start: int | None = None,
     ) -> RemotePolicyPrediction:
+        done_reason = _validate_done_reason(done=done, done_reason=done_reason)
         try:
             await self._ensure_ws()
             assert self._server_config is not None
@@ -233,7 +245,11 @@ class RemotePolicyClient:
             if prev_skipped_action_start is not None:
                 wire_frame[PREV_SKIPPED_ACTION_START_KEY] = int(prev_skipped_action_start)
             if done:
-                wire_frame[DONE_KEY] = True
+                if self._server_config.supports(ServerFeature.REWARDS):
+                    wire_frame[DONE_KEY] = True
+                    wire_frame[DONE_REASON_KEY] = done_reason
+                else:
+                    LOGGER.warning("Dropping done because server does not advertise %s support", ServerFeature.REWARDS)
             validate_wire_inference_request_frame(wire_frame)
             self._warn_on_camera_name_mismatch(wire_frame)
             payload = serialize_to_msgpack(wire_frame)
@@ -280,6 +296,7 @@ class RemotePolicyClient:
         *,
         reward: float | None = None,
         done: bool = False,
+        done_reason: str | None = None,
         task: str | None = None,
         subtask: str | None = None,
         action_chunk_hd: npt.NDArray[np.float32],
@@ -290,6 +307,7 @@ class RemotePolicyClient:
         `prev_skipped_action_start` is retrospective and marks where the
         previous chunk stopped executing before this request.
         """
+        done_reason = _validate_done_reason(done=done, done_reason=done_reason)
         try:
             await self._ensure_ws()
             assert self._server_config is not None
@@ -309,6 +327,7 @@ class RemotePolicyClient:
                 wire_frame[REWARD_KEY] = float(reward)
             if done:
                 wire_frame[DONE_KEY] = True
+                wire_frame[DONE_REASON_KEY] = done_reason
             validate_wire_intervention_request_frame(wire_frame)
             self._warn_on_camera_name_mismatch(wire_frame)
             payload = serialize_to_msgpack(wire_frame)
@@ -327,6 +346,22 @@ class RemotePolicyClient:
         assert isinstance(result, dict), f"unexpected response type {type(result)}"
         assert "error" not in result, f"unexpected error payload: {_summarize_server_payload(result)}"
         return result
+
+    async def mark_episode_done(self, done_reason: str) -> None:
+        done_reason = _validate_done_reason(done=True, done_reason=done_reason)
+        # Flag the most recent inference event on the server as terminal without sending a new
+        # observation. Only meaningful over the existing connection: a reconnect would yield a new
+        # client_id with no recorded events, so skip when the socket is already closed.
+        if self._ws is None:
+            return
+        try:
+            async with self._lock:
+                if self._ws is None:
+                    return
+                await self._ws.send(serialize_to_msgpack({ENDPOINT_KEY: ENDPOINT_DONE, DONE_REASON_KEY: done_reason}))
+                await self._ws.recv()
+        except websockets.ConnectionClosedError as exc:
+            LOGGER.warning("Failed to mark episode done; connection closed: %s", exc)
 
 
 __all__ = [

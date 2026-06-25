@@ -248,10 +248,11 @@ Optional response fields:
 
 ### Reward and control messages
 
-- `RemotePolicyClient.predict(..., reward=<float>)` includes a scalar reward in the inference request when the server handshake advertises `"rewards"`.
+- `RemotePolicyClient.predict(..., reward=<float>, done=True, done_reason=<str>)` includes scalar rewards and terminal markers in the inference request when the server handshake advertises `"rewards"`.
 - If reward support is not advertised, the client logs a warning and drops the reward.
-- `ENDPOINT_RESET` and `ENDPOINT_TELEMETRY` constants exist, and `server.minimal` replies to both with `{"status": "ok"}`.
-- There are no dedicated reset or telemetry client helpers in this package.
+- `ENDPOINT_DONE` and `ENDPOINT_TELEMETRY` constants exist, and `server.minimal` replies to both with `{"status": "ok"}`.
+- `ENDPOINT_DONE` marks the current episode as done on the server (it does not reset any gym environment); `RemotePolicyClient.mark_episode_done(done_reason)` sends it over the live connection.
+- There is no dedicated telemetry client helper in this package.
 
 ### Msgpack / NumPy codec
 

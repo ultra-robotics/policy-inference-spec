@@ -21,8 +21,8 @@ from policy_inference_spec.hardware_model import (
 from policy_inference_spec.protocol import (
     ACTION_KEY,
     DEFAULT_INFERENCE_SERVER_PORT,
+    ENDPOINT_DONE,
     ENDPOINT_KEY,
-    ENDPOINT_RESET,
     ENDPOINT_TELEMETRY,
     INFERENCE_TIME_KEY,
     JOINT_STATE_KEY,
@@ -118,7 +118,7 @@ async def handle_inference_connection(
         if not isinstance(frame, dict):
             await connection.send(serialize_to_msgpack({"error": "expected dict frame"}))
             continue
-        if frame.get(ENDPOINT_KEY) == ENDPOINT_RESET:
+        if frame.get(ENDPOINT_KEY) == ENDPOINT_DONE:
             await connection.send(serialize_to_msgpack({"status": "ok"}))
             continue
         if frame.get(ENDPOINT_KEY) == ENDPOINT_TELEMETRY:

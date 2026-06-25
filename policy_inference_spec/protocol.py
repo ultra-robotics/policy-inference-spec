@@ -32,13 +32,14 @@ CONDITIONING_METADATA_KEY = "conditioning_metadata"
 # Endpoint keys and values
 ENDPOINT_KEY = "endpoint"
 ENDPOINT_INTERVENTION = "intervention"
-ENDPOINT_RESET = "reset"
+ENDPOINT_DONE = "done"
 ENDPOINT_TELEMETRY = "telemetry"
 
 # Reward and retrospective episode keys.
 REWARD_KEY = "reward"
 REWARD_DESCRIPTION_KEY = "description"
 DONE_KEY = "done"
+DONE_REASON_KEY = "done_reason"
 
 # Server handshake keys
 CAMERA_NAMES_KEY = "camera_names"
@@ -174,9 +175,10 @@ __all__ = [
     "CONDITIONING_METADATA_KEY",
     "DEFAULT_INFERENCE_SERVER_PORT",
     "DONE_KEY",
+    "DONE_REASON_KEY",
     "ENDPOINT_KEY",
     "ENDPOINT_INTERVENTION",
-    "ENDPOINT_RESET",
+    "ENDPOINT_DONE",
     "ENDPOINT_TELEMETRY",
     "ERROR_KEY",
     "FloatArray",
