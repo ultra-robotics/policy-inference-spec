@@ -36,6 +36,7 @@ from policy_inference_spec.protocol import (
     JOINT_STATE_KEY,
     PREV_SKIPPED_ACTION_START_KEY,
     REWARD_KEY,
+    RL_ENABLED_KEY,
     SUBTASK_KEY,
     TASK_KEY,
     ServerFeature,
@@ -71,6 +72,7 @@ class RemotePolicyPrediction:
     actions_d: npt.NDArray[np.float32]
     total_latency_ms: float
     policy_id: str
+    rl_enabled: bool | None = None
 
 
 class InferenceServiceRestartedError(RuntimeError):
@@ -281,6 +283,8 @@ class RemotePolicyClient:
             assert isinstance(infer_raw, (int, float)), f"{INFERENCE_TIME_KEY} must be numeric"
             server_latency_ms = float(infer_raw)
         policy_id_used = str(result.get("policy_id", ""))
+        rl_enabled_raw = result.get(RL_ENABLED_KEY)
+        rl_enabled = bool(rl_enabled_raw) if rl_enabled_raw is not None else None
         self._record_latency(total_latency_ms=total_latency_ms, server_latency_ms=server_latency_ms)
 
         actions_d = np.array(actions, dtype=np.float32)
@@ -288,6 +292,7 @@ class RemotePolicyClient:
             actions_d=actions_d,
             total_latency_ms=total_latency_ms,
             policy_id=policy_id_used,
+            rl_enabled=rl_enabled,
         )
 
     async def record_human_intervention(
