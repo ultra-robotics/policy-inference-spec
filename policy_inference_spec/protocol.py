@@ -53,6 +53,7 @@ SERVER_FEATURES_KEY = "server_features"
 INFERENCE_TIME_KEY = "inference_time"
 STATUS_KEY = "status"
 ERROR_KEY = "error"
+RL_ENABLED_KEY = "rl_enabled"
 
 InferenceMetadataValue: TypeAlias = None | str | int | float | bool | list[Any] | dict[str, Any]
 ImageArray: TypeAlias = npt.NDArray[np.uint8]
@@ -199,6 +200,7 @@ __all__ = [
     "ProtocolValue",
     "REWARD_DESCRIPTION_KEY",
     "REWARD_KEY",
+    "RL_ENABLED_KEY",
     "START_METADATA_KEY",
     "SERVER_FEATURES_KEY",
     "STATUS_KEY",
