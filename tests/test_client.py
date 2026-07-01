@@ -19,6 +19,7 @@ from policy_inference_spec.hardware_model import (
     DEFAULT_HARDWARE_MODEL,
     server_handshake_for_hardware_model,
     validate_wire_inference_request_frame,
+    validate_wire_inference_response,
 )
 from policy_inference_spec.codec import deserialize_from_msgpack, serialize_to_msgpack
 from policy_inference_spec.protocol import (
@@ -35,6 +36,7 @@ from policy_inference_spec.protocol import (
     PREV_SKIPPED_ACTION_START_KEY,
     PREFIX_CHANGE_START_KEY,
     POLICY_ID_KEY,
+    Q_VALUE_KEY,
     REWARD_KEY,
     START_METADATA_KEY,
     SUBTASK_KEY,
@@ -108,6 +110,7 @@ async def test_predict_round_trip_with_mock_websocket() -> None:
             ACTION_KEY: actions,
             INFERENCE_TIME_KEY: 3.5,
             POLICY_ID_KEY: "policy-1",
+            Q_VALUE_KEY: 0.75,
         }
     )
     ws_mock = MagicMock()
@@ -128,6 +131,7 @@ async def test_predict_round_trip_with_mock_websocket() -> None:
     assert pred.actions_d.shape == (4, DEFAULT_HARDWARE_MODEL.action_dim)
     assert pred.actions_d.dtype == np.float32
     assert pred.total_latency_ms >= 0.0
+    assert pred.q_value == pytest.approx(0.75)
     ws_mock.send.assert_called_once()
     assert ws_mock.recv.call_count == 2
     assert connect_mock.call_args is not None
@@ -457,6 +461,27 @@ def test_validate_wire_inference_request_frame_accepts_unpadded_action_prefix() 
     frame[PREFIX_CHANGE_START_KEY] = 7
 
     validate_wire_inference_request_frame(frame)
+
+
+def test_validate_wire_inference_response_accepts_q_value() -> None:
+    validate_wire_inference_response(
+        {
+            ACTION_KEY: np.zeros((1, DEFAULT_HARDWARE_MODEL.action_dim), dtype=np.float32),
+            POLICY_ID_KEY: "policy-1",
+            Q_VALUE_KEY: 0.5,
+        }
+    )
+
+
+def test_validate_wire_inference_response_rejects_non_numeric_q_value() -> None:
+    with pytest.raises(AssertionError, match=Q_VALUE_KEY):
+        validate_wire_inference_response(
+            {
+                ACTION_KEY: np.zeros((1, DEFAULT_HARDWARE_MODEL.action_dim), dtype=np.float32),
+                POLICY_ID_KEY: "policy-1",
+                Q_VALUE_KEY: "high",
+            }
+        )
 
 
 def test_validate_wire_inference_request_frame_requires_action_prefix_pair() -> None:

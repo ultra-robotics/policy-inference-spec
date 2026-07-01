@@ -24,6 +24,7 @@ from policy_inference_spec.protocol import (
     POLICY_ID_KEY,
     PREV_SKIPPED_ACTION_START_KEY,
     PREFIX_CHANGE_START_KEY,
+    Q_VALUE_KEY,
     REWARD_KEY,
     RL_ENABLED_KEY,
     START_METADATA_KEY,
@@ -333,7 +334,7 @@ def validate_wire_inference_response(
 ) -> None:
     response_summary = _summarize_response_payload(result)
     assert "error" not in result, f"unexpected error payload: {response_summary}"
-    allowed = frozenset({ACTION_KEY, INFERENCE_TIME_KEY, POLICY_ID_KEY, RL_ENABLED_KEY})
+    allowed = frozenset({ACTION_KEY, INFERENCE_TIME_KEY, POLICY_ID_KEY, RL_ENABLED_KEY, Q_VALUE_KEY})
     assert set(result.keys()) <= allowed, (
         f"response keys {set(result.keys())} not subset of {allowed}; summary={response_summary}"
     )
@@ -351,6 +352,8 @@ def validate_wire_inference_response(
         assert isinstance(result[POLICY_ID_KEY], str), f"{POLICY_ID_KEY} must be str"
     if RL_ENABLED_KEY in result:
         assert isinstance(result[RL_ENABLED_KEY], bool), f"{RL_ENABLED_KEY} must be bool"
+    if Q_VALUE_KEY in result:
+        assert isinstance(result[Q_VALUE_KEY], (int, float)), f"{Q_VALUE_KEY} must be numeric"
 
 
 __all__ = [

@@ -28,6 +28,7 @@ from policy_inference_spec.protocol import (
     JOINT_STATE_KEY,
     MODEL_ID_KEY,
     POLICY_ID_KEY,
+    Q_VALUE_KEY,
     SUBTASK_KEY,
     TASK_KEY,
     STATUS_KEY,
@@ -98,6 +99,7 @@ def _inference_response(
         ACTION_KEY: actions,
         INFERENCE_TIME_KEY: 0.25,
         POLICY_ID_KEY: EXAMPLE_POLICY_ID,
+        Q_VALUE_KEY: 0.0,
     }
     validate_wire_inference_response(resp)
     return resp
