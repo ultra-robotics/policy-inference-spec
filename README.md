@@ -239,12 +239,16 @@ Optional response fields:
 
 - `inference_time`: numeric
 - `policy_id`: `str`
+- `rl_enabled`: `bool`, whether the returned action chunk used the RL actor
+- `q_value`: numeric, critic Q estimate for the returned action chunk when available
 
 `RemotePolicyClient.predict()` returns `RemotePolicyPrediction`:
 
 - `actions_d`
 - `total_latency_ms`
 - `policy_id`
+- `rl_enabled`
+- `q_value`
 
 ### Reward and control messages
 

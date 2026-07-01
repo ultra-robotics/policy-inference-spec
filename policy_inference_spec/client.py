@@ -35,6 +35,7 @@ from policy_inference_spec.protocol import (
     INFERENCE_TIME_KEY,
     JOINT_STATE_KEY,
     PREV_SKIPPED_ACTION_START_KEY,
+    Q_VALUE_KEY,
     REWARD_KEY,
     RL_ENABLED_KEY,
     SUBTASK_KEY,
@@ -73,6 +74,7 @@ class RemotePolicyPrediction:
     total_latency_ms: float
     policy_id: str
     rl_enabled: bool | None = None
+    q_value: float | None = None
 
 
 class InferenceServiceRestartedError(RuntimeError):
@@ -285,6 +287,8 @@ class RemotePolicyClient:
         policy_id_used = str(result.get("policy_id", ""))
         rl_enabled_raw = result.get(RL_ENABLED_KEY)
         rl_enabled = bool(rl_enabled_raw) if rl_enabled_raw is not None else None
+        q_value_raw = result.get(Q_VALUE_KEY)
+        q_value = float(q_value_raw) if q_value_raw is not None else None
         self._record_latency(total_latency_ms=total_latency_ms, server_latency_ms=server_latency_ms)
 
         actions_d = np.array(actions, dtype=np.float32)
@@ -293,6 +297,7 @@ class RemotePolicyClient:
             total_latency_ms=total_latency_ms,
             policy_id=policy_id_used,
             rl_enabled=rl_enabled,
+            q_value=q_value,
         )
 
     async def record_human_intervention(

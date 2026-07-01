@@ -54,6 +54,7 @@ INFERENCE_TIME_KEY = "inference_time"
 STATUS_KEY = "status"
 ERROR_KEY = "error"
 RL_ENABLED_KEY = "rl_enabled"
+Q_VALUE_KEY = "q_value"
 
 InferenceMetadataValue: TypeAlias = None | str | int | float | bool | list[Any] | dict[str, Any]
 ImageArray: TypeAlias = npt.NDArray[np.uint8]
@@ -198,6 +199,7 @@ __all__ = [
     "PREFIX_CHANGE_START_KEY",
     "ProtocolPayload",
     "ProtocolValue",
+    "Q_VALUE_KEY",
     "REWARD_DESCRIPTION_KEY",
     "REWARD_KEY",
     "RL_ENABLED_KEY",
