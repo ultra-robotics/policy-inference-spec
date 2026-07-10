@@ -19,6 +19,7 @@ from policy_inference_spec.protocol import (
     REWARD_KEY,
     START_METADATA_KEY,
     SUBTASK_KEY,
+    TABLE_VIEW_IMAGE_KEY,
     TASK_KEY,
     ServerFeature,
     ServerHandshake,
@@ -126,6 +127,34 @@ def test_server_handshake_round_trip_preserves_server_features() -> None:
 
     assert decoded == handshake
     assert decoded.supports(ServerFeature.REWARDS)
+
+
+def test_validate_wire_inference_request_frame_accepts_optional_table_view_image() -> None:
+    payload: ProtocolPayload = {
+        JOINT_STATE_KEY: np.zeros(DEFAULT_HARDWARE_MODEL.state_dim, dtype=np.float32),
+        TASK_KEY: "",
+        SUBTASK_KEY: "",
+        MODEL_ID_KEY: "",
+        TABLE_VIEW_IMAGE_KEY: np.zeros((300, 480, 3), dtype=np.uint8),
+    }
+    for camera in DEFAULT_HARDWARE_MODEL.cameras:
+        payload[f"observation/{camera}"] = np.zeros(DEFAULT_HARDWARE_MODEL.image_resolution + (3,), dtype=np.uint8)
+
+    validate_wire_inference_request_frame(payload)
+
+
+def test_validate_wire_inference_request_frame_accepts_missing_table_view_image() -> None:
+    payload: ProtocolPayload = {
+        JOINT_STATE_KEY: np.zeros(DEFAULT_HARDWARE_MODEL.state_dim, dtype=np.float32),
+        TASK_KEY: "",
+        SUBTASK_KEY: "",
+        MODEL_ID_KEY: "",
+    }
+    for camera in DEFAULT_HARDWARE_MODEL.cameras:
+        payload[f"observation/{camera}"] = np.zeros(DEFAULT_HARDWARE_MODEL.image_resolution + (3,), dtype=np.uint8)
+
+    validate_wire_inference_request_frame(payload)
+    assert TABLE_VIEW_IMAGE_KEY not in payload
 
 
 def test_validate_wire_inference_request_frame_accepts_scalar_reward() -> None:
