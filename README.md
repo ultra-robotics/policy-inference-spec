@@ -216,8 +216,12 @@ Current validation rules:
 
 Optional request fields:
 
+- `observation/images/table_view_image`: optional station hardware camera. JPEG `bytes` or `numpy.ndarray`. May be omitted when the station has no table-view cam.
 - `action_prefix`: floating 2-D `numpy.ndarray` shaped `(prefix_steps, 25)`. It carries only real prefix actions; clients must not pad it to the full policy horizon.
 - `prefix_change_start`: non-negative `int`. Required when `action_prefix` is present. In replay tooling this defaults to `--action-prefix-steps` unless `--prefix-change-start` is set.
+- `reward`, `done`, `done_reason`, `prev_skipped_action_start`
+- `start_metadata`, `conditioning_metadata`
+- `observation/hidden`, `observation/env`
 - `dumb_reward_goal_action_chunk` plus `dumb_reward_threshold`: optional debugging/reward fields.
 - `fast_mock_action_dim` plus `fast_mock_action_horizon`: optional testing fields.
 

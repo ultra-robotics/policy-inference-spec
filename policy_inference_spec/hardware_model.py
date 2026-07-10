@@ -29,6 +29,7 @@ from policy_inference_spec.protocol import (
     RL_ENABLED_KEY,
     START_METADATA_KEY,
     SUBTASK_KEY,
+    TABLE_VIEW_IMAGE_KEY,
     TASK_KEY,
     ServerFeature,
     ServerHandshake,
@@ -153,6 +154,8 @@ def _optional_wire_inference_request_keys() -> frozenset[str]:
             CONDITIONING_METADATA_KEY,
             TASK_KEY,
             SUBTASK_KEY,
+            # Optional station hardware; present only when table-view cam is available.
+            TABLE_VIEW_IMAGE_KEY,
         }
     )
 
@@ -294,6 +297,11 @@ def validate_wire_inference_request_frame(
     for k in _observation_keys(hardware_model):
         v = frame[k]
         assert isinstance(v, (bytes, np.ndarray)), f"{k} must be jpeg bytes or ndarray, got {type(v)}"
+    if TABLE_VIEW_IMAGE_KEY in frame:
+        table_view = frame[TABLE_VIEW_IMAGE_KEY]
+        assert isinstance(table_view, (bytes, np.ndarray)), (
+            f"{TABLE_VIEW_IMAGE_KEY} must be jpeg bytes or ndarray, got {type(table_view)}"
+        )
     return hardware_model
 
 

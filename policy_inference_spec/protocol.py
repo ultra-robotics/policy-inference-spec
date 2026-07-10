@@ -14,6 +14,8 @@ DEFAULT_INFERENCE_SERVER_PORT = 18090
 JOINT_STATE_KEY = "observation/state"
 OBSERVATION_HIDDEN_KEY = "observation/hidden"
 OBSERVATION_ENV_KEY = "observation/env"
+# Optional hardware camera (stations may omit table-view).
+TABLE_VIEW_IMAGE_KEY = "observation/images/table_view_image"
 
 # Action payload keys
 ACTION_KEY = "action"
@@ -191,6 +193,7 @@ __all__ = [
     "JOINT_STATE_KEY",
     "OBSERVATION_ENV_KEY",
     "OBSERVATION_HIDDEN_KEY",
+    "TABLE_VIEW_IMAGE_KEY",
     "MODEL_ID_KEY",
     "N_EXTERNAL_CAMERAS_KEY",
     "NEEDS_WRIST_CAMERA_KEY",
