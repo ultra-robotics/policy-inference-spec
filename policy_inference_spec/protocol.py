@@ -51,6 +51,9 @@ NEEDS_WRIST_CAMERA_KEY = "needs_wrist_camera"
 N_EXTERNAL_CAMERAS_KEY = "n_external_cameras"
 SERVER_FEATURES_KEY = "server_features"
 
+# Request/response chunk tracking
+CHUNK_ID_KEY = "chunk_id"
+
 # Response status keys
 INFERENCE_TIME_KEY = "inference_time"
 STATUS_KEY = "status"
@@ -176,6 +179,7 @@ __all__ = [
     "ACTION_PREFIX_KEY",
     "ACTION_SPACE_KEY",
     "CAMERA_NAMES_KEY",
+    "CHUNK_ID_KEY",
     "CONDITIONING_METADATA_KEY",
     "DEFAULT_INFERENCE_SERVER_PORT",
     "DONE_KEY",
