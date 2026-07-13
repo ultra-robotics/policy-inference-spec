@@ -11,6 +11,7 @@ import numpy.typing as npt
 from policy_inference_spec.protocol import (
     ACTION_KEY,
     ACTION_PREFIX_KEY,
+    CHUNK_ID_KEY,
     CONDITIONING_METADATA_KEY,
     ENDPOINT_INTERVENTION,
     ENDPOINT_KEY,
@@ -156,6 +157,7 @@ def _optional_wire_inference_request_keys() -> frozenset[str]:
             SUBTASK_KEY,
             # Optional station hardware; present only when table-view cam is available.
             TABLE_VIEW_IMAGE_KEY,
+            CHUNK_ID_KEY,
         }
     )
 
@@ -342,7 +344,7 @@ def validate_wire_inference_response(
 ) -> None:
     response_summary = _summarize_response_payload(result)
     assert "error" not in result, f"unexpected error payload: {response_summary}"
-    allowed = frozenset({ACTION_KEY, INFERENCE_TIME_KEY, POLICY_ID_KEY, RL_ENABLED_KEY, Q_VALUE_KEY})
+    allowed = frozenset({ACTION_KEY, INFERENCE_TIME_KEY, POLICY_ID_KEY, RL_ENABLED_KEY, Q_VALUE_KEY, CHUNK_ID_KEY})
     assert set(result.keys()) <= allowed, (
         f"response keys {set(result.keys())} not subset of {allowed}; summary={response_summary}"
     )
