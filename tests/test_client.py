@@ -37,6 +37,7 @@ from policy_inference_spec.protocol import (
     PREFIX_CHANGE_START_KEY,
     POLICY_ID_KEY,
     Q_VALUE_KEY,
+    REWARD_ACTION_INDEX_KEY,
     REWARD_KEY,
     START_METADATA_KEY,
     SUBTASK_KEY,
@@ -165,6 +166,35 @@ async def test_predict_includes_reward_when_server_supports_rewards() -> None:
     assert await_args is not None
     sent_payload = deserialize_from_msgpack(await_args.args[0])
     assert sent_payload[REWARD_KEY] == pytest.approx(2.5)
+
+
+@pytest.mark.asyncio
+async def test_predict_includes_reward_action_index_when_server_supports_rewards() -> None:
+    cfg = serialize_to_msgpack(_server_handshake_payload(rewards_enabled=True))
+    resp = serialize_to_msgpack(
+        {
+            ACTION_KEY: np.zeros((1, DEFAULT_HARDWARE_MODEL.action_dim), dtype=np.float32),
+            POLICY_ID_KEY: "policy-1",
+        }
+    )
+    ws_mock = MagicMock()
+    ws_mock.recv = AsyncMock(side_effect=[cfg, resp])
+    ws_mock.send = AsyncMock()
+    ws_mock.close = AsyncMock()
+
+    async def fake_connect(*_a: object, **_kw: object) -> MagicMock:
+        return ws_mock
+
+    with patch("policy_inference_spec.client.websockets.connect", side_effect=fake_connect):
+        client = RemotePolicyClient("ws://127.0.0.1:9/ws")
+        await client.predict(_valid_wire_frame(), reward=1.0, reward_action_index=7)
+        await client.aclose()
+
+    await_args = ws_mock.send.await_args
+    assert await_args is not None
+    sent_payload = deserialize_from_msgpack(await_args.args[0])
+    assert sent_payload[REWARD_KEY] == pytest.approx(1.0)
+    assert sent_payload[REWARD_ACTION_INDEX_KEY] == 7
 
 
 @pytest.mark.asyncio

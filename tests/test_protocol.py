@@ -16,6 +16,7 @@ from policy_inference_spec.protocol import (
     ProtocolPayload,
     JOINT_STATE_KEY,
     MODEL_ID_KEY,
+    REWARD_ACTION_INDEX_KEY,
     REWARD_KEY,
     START_METADATA_KEY,
     SUBTASK_KEY,
@@ -169,6 +170,36 @@ def test_validate_wire_inference_request_frame_accepts_scalar_reward() -> None:
         payload[f"observation/{camera}"] = np.zeros(DEFAULT_HARDWARE_MODEL.image_resolution + (3,), dtype=np.uint8)
 
     validate_wire_inference_request_frame(payload)
+
+
+def test_validate_wire_inference_request_frame_accepts_reward_action_index() -> None:
+    payload: ProtocolPayload = {
+        JOINT_STATE_KEY: np.zeros(DEFAULT_HARDWARE_MODEL.state_dim, dtype=np.float32),
+        TASK_KEY: "",
+        SUBTASK_KEY: "",
+        MODEL_ID_KEY: "",
+        REWARD_KEY: 1.25,
+        REWARD_ACTION_INDEX_KEY: 12,
+    }
+    for camera in DEFAULT_HARDWARE_MODEL.cameras:
+        payload[f"observation/{camera}"] = np.zeros(DEFAULT_HARDWARE_MODEL.image_resolution + (3,), dtype=np.uint8)
+
+    validate_wire_inference_request_frame(payload)
+
+
+def test_validate_wire_inference_request_frame_rejects_out_of_range_reward_action_index() -> None:
+    payload: ProtocolPayload = {
+        JOINT_STATE_KEY: np.zeros(DEFAULT_HARDWARE_MODEL.state_dim, dtype=np.float32),
+        TASK_KEY: "",
+        SUBTASK_KEY: "",
+        MODEL_ID_KEY: "",
+        REWARD_ACTION_INDEX_KEY: 50,
+    }
+    for camera in DEFAULT_HARDWARE_MODEL.cameras:
+        payload[f"observation/{camera}"] = np.zeros(DEFAULT_HARDWARE_MODEL.image_resolution + (3,), dtype=np.uint8)
+
+    with pytest.raises(AssertionError, match=REWARD_ACTION_INDEX_KEY):
+        validate_wire_inference_request_frame(payload)
 
 
 def test_validate_wire_inference_request_frame_accepts_start_metadata() -> None:
