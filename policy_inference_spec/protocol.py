@@ -39,6 +39,7 @@ ENDPOINT_TELEMETRY = "telemetry"
 
 # Reward and retrospective episode keys.
 REWARD_KEY = "reward"
+REWARD_ACTION_INDEX_KEY = "reward_action_index"
 REWARD_DESCRIPTION_KEY = "description"
 DONE_KEY = "done"
 DONE_REASON_KEY = "done_reason"
@@ -207,6 +208,7 @@ __all__ = [
     "ProtocolPayload",
     "ProtocolValue",
     "Q_VALUE_KEY",
+    "REWARD_ACTION_INDEX_KEY",
     "REWARD_DESCRIPTION_KEY",
     "REWARD_KEY",
     "RL_ENABLED_KEY",
