@@ -68,13 +68,17 @@ async def test_client_sends_inline_reward_against_example_server() -> None:
             assert client._server_config == server_handshake_config(server_features=(ServerFeature.REWARDS,))
 
 
-async def test_client_rejects_reward_when_example_server_does_not_advertise_rewards() -> None:
+async def test_client_inline_reward_is_dropped_when_example_server_does_not_advertise_rewards(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     frame = _random_predict_frame()
     async with run_example_server(server_features=()) as url:
         client = RemotePolicyClient(url)
         async with client:
-            with pytest.raises(AssertionError, match="rewards"):
+            with caplog.at_level("WARNING", logger="policy_inference_spec.client"):
                 await client.predict(frame, reward=1.5, reward_action_index=0)
+
+    assert "Dropping reward/reward_action_index because server does not advertise rewards support" in caplog.text
 
 
 async def test_example_server_cli_arg_parsing() -> None:

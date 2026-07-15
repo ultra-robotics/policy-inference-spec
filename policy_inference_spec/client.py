@@ -248,15 +248,17 @@ class RemotePolicyClient:
             assert self._server_config is not None
             wire_frame = self._encode_wire_frame_images(wire_frame)
             wire_frame[CHUNK_ID_KEY] = chunk_id
-            if reward is not None:
-                assert self._server_config.supports(ServerFeature.REWARDS), (
-                    f"server does not advertise {ServerFeature.REWARDS} support"
-                )
-                assert reward_action_index is not None, "reward_action_index is required when reward is set"
-                wire_frame[REWARD_KEY] = float(reward)
-                wire_frame[REWARD_ACTION_INDEX_KEY] = int(reward_action_index)
-            else:
-                assert reward_action_index is None, "reward_action_index requires reward"
+            if reward is not None or reward_action_index is not None:
+                if self._server_config.supports(ServerFeature.REWARDS):
+                    assert reward is not None, "reward is required when reward_action_index is set"
+                    assert reward_action_index is not None, "reward_action_index is required when reward is set"
+                    wire_frame[REWARD_KEY] = float(reward)
+                    wire_frame[REWARD_ACTION_INDEX_KEY] = int(reward_action_index)
+                else:
+                    LOGGER.warning(
+                        "Dropping reward/reward_action_index because server does not advertise %s support",
+                        ServerFeature.REWARDS,
+                    )
             if prev_skipped_action_start is not None:
                 wire_frame[PREV_SKIPPED_ACTION_START_KEY] = int(prev_skipped_action_start)
             if done:
@@ -355,12 +357,17 @@ class RemotePolicyClient:
                 wire_frame[SUBTASK_KEY] = str(subtask)
             if prev_skipped_action_start is not None:
                 wire_frame[PREV_SKIPPED_ACTION_START_KEY] = int(prev_skipped_action_start)
-            if reward is not None:
-                assert reward_action_index is not None, "reward_action_index is required when reward is set"
-                wire_frame[REWARD_KEY] = float(reward)
-                wire_frame[REWARD_ACTION_INDEX_KEY] = int(reward_action_index)
-            else:
-                assert reward_action_index is None, "reward_action_index requires reward"
+            if reward is not None or reward_action_index is not None:
+                if self._server_config.supports(ServerFeature.REWARDS):
+                    assert reward is not None, "reward is required when reward_action_index is set"
+                    assert reward_action_index is not None, "reward_action_index is required when reward is set"
+                    wire_frame[REWARD_KEY] = float(reward)
+                    wire_frame[REWARD_ACTION_INDEX_KEY] = int(reward_action_index)
+                else:
+                    LOGGER.warning(
+                        "Dropping reward/reward_action_index because server does not advertise %s support",
+                        ServerFeature.REWARDS,
+                    )
             if done:
                 wire_frame[DONE_KEY] = True
                 wire_frame[DONE_REASON_KEY] = done_reason

@@ -542,7 +542,7 @@ def test_validate_wire_inference_request_frame_rejects_nonfloating_action_prefix
 
 
 @pytest.mark.asyncio
-async def test_predict_rejects_reward_when_server_lacks_reward_support() -> None:
+async def test_predict_omits_reward_when_server_lacks_reward_support(caplog: pytest.LogCaptureFixture) -> None:
     cfg = serialize_to_msgpack(_server_handshake_payload(rewards_enabled=False))
     resp = serialize_to_msgpack(
         {
@@ -560,9 +560,16 @@ async def test_predict_rejects_reward_when_server_lacks_reward_support() -> None
 
     with patch("policy_inference_spec.client.websockets.connect", side_effect=fake_connect):
         client = RemotePolicyClient("ws://127.0.0.1:9/ws")
-        with pytest.raises(AssertionError, match="rewards"):
+        with caplog.at_level("WARNING", logger="policy_inference_spec.client"):
             await client.predict(_valid_wire_frame(), reward=3.0, reward_action_index=0)
         await client.aclose()
+
+    await_args = ws_mock.send.await_args
+    assert await_args is not None
+    sent_payload = deserialize_from_msgpack(await_args.args[0])
+    assert REWARD_KEY not in sent_payload
+    assert REWARD_ACTION_INDEX_KEY not in sent_payload
+    assert "Dropping reward/reward_action_index because server does not advertise rewards support" in caplog.text
 
 
 @pytest.mark.asyncio
