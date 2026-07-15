@@ -159,13 +159,14 @@ async def test_predict_includes_reward_when_server_supports_rewards() -> None:
     frame = _valid_wire_frame()
     with patch("policy_inference_spec.client.websockets.connect", side_effect=fake_connect):
         client = RemotePolicyClient("ws://127.0.0.1:9/ws")
-        await client.predict(frame, reward=2.5)
+        await client.predict(frame, reward=2.5, reward_action_index=0)
         await client.aclose()
 
     await_args = ws_mock.send.await_args
     assert await_args is not None
     sent_payload = deserialize_from_msgpack(await_args.args[0])
     assert sent_payload[REWARD_KEY] == pytest.approx(2.5)
+    assert sent_payload[REWARD_ACTION_INDEX_KEY] == 0
 
 
 @pytest.mark.asyncio
@@ -541,7 +542,7 @@ def test_validate_wire_inference_request_frame_rejects_nonfloating_action_prefix
 
 
 @pytest.mark.asyncio
-async def test_predict_omits_reward_when_server_lacks_reward_support(caplog: pytest.LogCaptureFixture) -> None:
+async def test_predict_rejects_reward_when_server_lacks_reward_support() -> None:
     cfg = serialize_to_msgpack(_server_handshake_payload(rewards_enabled=False))
     resp = serialize_to_msgpack(
         {
@@ -559,12 +560,30 @@ async def test_predict_omits_reward_when_server_lacks_reward_support(caplog: pyt
 
     with patch("policy_inference_spec.client.websockets.connect", side_effect=fake_connect):
         client = RemotePolicyClient("ws://127.0.0.1:9/ws")
-        with caplog.at_level("WARNING", logger="policy_inference_spec.client"):
-            await client.predict(_valid_wire_frame(), reward=3.0)
+        with pytest.raises(AssertionError, match="rewards"):
+            await client.predict(_valid_wire_frame(), reward=3.0, reward_action_index=0)
         await client.aclose()
 
-    await_args = ws_mock.send.await_args
-    assert await_args is not None
-    sent_payload = deserialize_from_msgpack(await_args.args[0])
-    assert REWARD_KEY not in sent_payload
-    assert "Dropping reward because server does not advertise rewards support" in caplog.text
+
+@pytest.mark.asyncio
+async def test_predict_rejects_reward_without_action_index() -> None:
+    cfg = serialize_to_msgpack(_server_handshake_payload(rewards_enabled=True))
+    resp = serialize_to_msgpack(
+        {
+            ACTION_KEY: np.zeros((1, DEFAULT_HARDWARE_MODEL.action_dim), dtype=np.float32),
+            POLICY_ID_KEY: "policy-1",
+        }
+    )
+    ws_mock = MagicMock()
+    ws_mock.recv = AsyncMock(side_effect=[cfg, resp])
+    ws_mock.send = AsyncMock()
+    ws_mock.close = AsyncMock()
+
+    async def fake_connect(*_a: object, **_kw: object) -> MagicMock:
+        return ws_mock
+
+    with patch("policy_inference_spec.client.websockets.connect", side_effect=fake_connect):
+        client = RemotePolicyClient("ws://127.0.0.1:9/ws")
+        with pytest.raises(AssertionError, match="reward_action_index"):
+            await client.predict(_valid_wire_frame(), reward=3.0)
+        await client.aclose()

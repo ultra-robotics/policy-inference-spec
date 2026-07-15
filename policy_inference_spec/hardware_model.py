@@ -237,6 +237,9 @@ def validate_wire_inference_request_frame(
     assert isinstance(frame[MODEL_ID_KEY], str), f"{MODEL_ID_KEY} must be str"
     if REWARD_KEY in frame:
         assert isinstance(frame[REWARD_KEY], (int, float)), f"{REWARD_KEY} must be numeric"
+        assert REWARD_ACTION_INDEX_KEY in frame, (
+            f"{REWARD_ACTION_INDEX_KEY} is required when {REWARD_KEY} is present"
+        )
     if REWARD_ACTION_INDEX_KEY in frame:
         reward_action_index = frame[REWARD_ACTION_INDEX_KEY]
         assert isinstance(reward_action_index, int), f"{REWARD_ACTION_INDEX_KEY} must be int"
