@@ -17,7 +17,6 @@ from policy_inference_spec.client_helpers import (
     _emit_server_error_verbatim,
     _log_server_config,
     _summarize_server_payload,
-    _wire_camera_names,
     policy_ws_url,
 )
 from policy_inference_spec.codec import deserialize_from_msgpack, encode_image, serialize_to_msgpack
@@ -125,20 +124,6 @@ class RemotePolicyClient:
 
     def _headers(self) -> list[tuple[str, str]]:
         return [(k, v) for k, v in self._policy_auth_headers.items()]
-
-    def _warn_on_camera_name_mismatch(self, wire_frame: dict[str, Any]) -> None:
-        if self._server_config is None:
-            return
-        server_camera_names = self._server_config.camera_names
-        sent_camera_names = _wire_camera_names(wire_frame)
-        missing_camera_names = sorted(name for name in sent_camera_names if name not in set(server_camera_names))
-        if missing_camera_names:
-            LOGGER.warning(
-                "Sending camera names not present in server config. sent=%s missing=%s server_camera_names=%s",
-                sent_camera_names,
-                missing_camera_names,
-                sorted(server_camera_names),
-            )
 
     def _encode_wire_frame_images(self, wire_frame: dict[str, Any]) -> dict[str, Any]:
         adapted = dict(wire_frame)
@@ -272,7 +257,6 @@ class RemotePolicyClient:
                 else:
                     LOGGER.warning("Dropping done because server does not advertise %s support", ServerFeature.REWARDS)
             validate_wire_inference_request_frame(wire_frame)
-            self._warn_on_camera_name_mismatch(wire_frame)
             payload = serialize_to_msgpack(wire_frame)
             start_time_ns = time.time_ns()
             async with self._lock:
@@ -369,7 +353,6 @@ class RemotePolicyClient:
                 wire_frame[DONE_KEY] = True
                 wire_frame[DONE_REASON_KEY] = done_reason
             validate_wire_intervention_request_frame(wire_frame)
-            self._warn_on_camera_name_mismatch(wire_frame)
             payload = serialize_to_msgpack(wire_frame)
             async with self._lock:
                 assert self._ws is not None
