@@ -37,7 +37,6 @@ from policy_inference_spec.protocol import (
     JOINT_STATE_KEY,
     PREV_SKIPPED_ACTION_START_KEY,
     Q_VALUE_KEY,
-    REWARD_ACTION_INDEX_KEY,
     REWARD_KEY,
     RL_ENABLED_KEY,
     SUBTASK_KEY,
@@ -220,7 +219,6 @@ class RemotePolicyClient:
         *,
         chunk_id: str | None = None,
         reward: float | None = None,
-        reward_action_index: int | None = None,
         done: bool = False,
         done_reason: str | None = None,
         prev_skipped_action_start: int | None = None,
@@ -239,14 +237,6 @@ class RemotePolicyClient:
                 else:
                     LOGGER.warning(
                         "Dropping reward because server does not advertise %s support", ServerFeature.REWARDS
-                    )
-            if reward_action_index is not None:
-                if self._server_config.supports(ServerFeature.REWARDS):
-                    wire_frame[REWARD_ACTION_INDEX_KEY] = int(reward_action_index)
-                else:
-                    LOGGER.warning(
-                        "Dropping reward_action_index because server does not advertise %s support",
-                        ServerFeature.REWARDS,
                     )
             if prev_skipped_action_start is not None:
                 wire_frame[PREV_SKIPPED_ACTION_START_KEY] = int(prev_skipped_action_start)
@@ -316,7 +306,6 @@ class RemotePolicyClient:
         wire_frame: dict[str, Any],
         *,
         reward: float | None = None,
-        reward_action_index: int | None = None,
         done: bool = False,
         done_reason: str | None = None,
         task: str | None = None,
@@ -347,8 +336,6 @@ class RemotePolicyClient:
                 wire_frame[PREV_SKIPPED_ACTION_START_KEY] = int(prev_skipped_action_start)
             if reward is not None:
                 wire_frame[REWARD_KEY] = float(reward)
-            if reward_action_index is not None:
-                wire_frame[REWARD_ACTION_INDEX_KEY] = int(reward_action_index)
             if done:
                 wire_frame[DONE_KEY] = True
                 wire_frame[DONE_REASON_KEY] = done_reason
