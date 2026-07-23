@@ -26,7 +26,6 @@ from policy_inference_spec.protocol import (
     PREV_SKIPPED_ACTION_START_KEY,
     PREFIX_CHANGE_START_KEY,
     Q_VALUE_KEY,
-    REWARD_ACTION_INDEX_KEY,
     REWARD_KEY,
     RL_ENABLED_KEY,
     START_METADATA_KEY,
@@ -150,7 +149,6 @@ def _optional_wire_inference_request_keys() -> frozenset[str]:
             OBSERVATION_HIDDEN_KEY,
             PREV_SKIPPED_ACTION_START_KEY,
             REWARD_KEY,
-            REWARD_ACTION_INDEX_KEY,
             DONE_KEY,
             DONE_REASON_KEY,
             START_METADATA_KEY,
@@ -237,12 +235,6 @@ def validate_wire_inference_request_frame(
     assert isinstance(frame[MODEL_ID_KEY], str), f"{MODEL_ID_KEY} must be str"
     if REWARD_KEY in frame:
         assert isinstance(frame[REWARD_KEY], (int, float)), f"{REWARD_KEY} must be numeric"
-    if REWARD_ACTION_INDEX_KEY in frame:
-        reward_action_index = frame[REWARD_ACTION_INDEX_KEY]
-        assert isinstance(reward_action_index, int), f"{REWARD_ACTION_INDEX_KEY} must be int"
-        assert 0 <= reward_action_index < 50, (
-            f"{REWARD_ACTION_INDEX_KEY} must be in [0, 50), got {reward_action_index}"
-        )
     if START_METADATA_KEY in frame:
         start_metadata = frame[START_METADATA_KEY]
         assert isinstance(start_metadata, dict), f"{START_METADATA_KEY} must be dict"
