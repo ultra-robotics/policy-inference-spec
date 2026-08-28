@@ -36,6 +36,8 @@ from policy_inference_spec.protocol import (
     ENDPOINT_KEY,
     INFERENCE_TIME_KEY,
     JOINT_STATE_KEY,
+    OBSERVATION_HISTORY_KEY,
+    OBSERVATION_HISTORY_VALUES_KEY,
     PREV_SKIPPED_ACTION_START_KEY,
     Q_VALUE_KEY,
     REWARD_KEY,
@@ -51,7 +53,9 @@ LOGGER = logging.getLogger(__name__)
 
 def _validate_done_reason(*, done: bool, done_reason: str | None) -> str | None:
     if done:
-        assert isinstance(done_reason, str) and done_reason.strip(), "done_reason must be a non-empty str when done=True"
+        assert isinstance(done_reason, str) and done_reason.strip(), (
+            "done_reason must be a non-empty str when done=True"
+        )
         return done_reason.strip()
     assert done_reason is None, "done_reason must be None when done=False"
     return None
@@ -142,6 +146,22 @@ class RemotePolicyClient:
     def _encode_wire_frame_images(self, wire_frame: dict[str, Any]) -> dict[str, Any]:
         adapted = dict(wire_frame)
         for key, value in wire_frame.items():
+            if key == OBSERVATION_HISTORY_KEY:
+                assert isinstance(value, dict), f"{OBSERVATION_HISTORY_KEY} must be dict"
+                history = {feature_key: dict(sequence) for feature_key, sequence in value.items()}
+                for feature_key, sequence in history.items():
+                    if feature_key == JOINT_STATE_KEY:
+                        continue
+                    values = sequence[OBSERVATION_HISTORY_VALUES_KEY]
+                    assert isinstance(values, list), f"{OBSERVATION_HISTORY_KEY}[{feature_key!r}] values must be list"
+                    sequence[OBSERVATION_HISTORY_VALUES_KEY] = [
+                        image_value
+                        if isinstance(image_value, bytes)
+                        else encode_image(_wire_image_to_hwc_uint8(image_value), jpeg_quality=75).data
+                        for image_value in values
+                    ]
+                adapted[key] = history
+                continue
             if not key.startswith("observation/") or key == JOINT_STATE_KEY or isinstance(value, bytes):
                 continue
             image = _wire_image_to_hwc_uint8(value)
@@ -304,7 +324,9 @@ class RemotePolicyClient:
         rl_enabled_raw = result.get(RL_ENABLED_KEY)
         rl_enabled = bool(rl_enabled_raw) if rl_enabled_raw is not None else None
         q_value_raw = result.get(Q_VALUE_KEY)
-        q_value = float(q_value_raw) if q_value_raw is not None else None
+        if q_value_raw is not None:
+            assert isinstance(q_value_raw, (int, float)), f"{Q_VALUE_KEY} must be numeric"
+        q_value = float(q_value_raw) if isinstance(q_value_raw, (int, float)) else None
         self._record_latency(total_latency_ms=total_latency_ms, server_latency_ms=server_latency_ms)
 
         actions_d = np.array(actions, dtype=np.float32)
@@ -375,7 +397,8 @@ class RemotePolicyClient:
         return result
 
     async def mark_episode_done(self, done_reason: str) -> None:
-        done_reason = _validate_done_reason(done=True, done_reason=done_reason)
+        validated_done_reason = _validate_done_reason(done=True, done_reason=done_reason)
+        assert validated_done_reason is not None
         # Flag the most recent inference event on the server as terminal without sending a new
         # observation. Only meaningful over the existing connection: a reconnect would yield a new
         # client_id with no recorded events, so skip when the socket is already closed.
@@ -385,7 +408,9 @@ class RemotePolicyClient:
             async with self._lock:
                 if self._ws is None:
                     return
-                await self._ws.send(serialize_to_msgpack({ENDPOINT_KEY: ENDPOINT_DONE, DONE_REASON_KEY: done_reason}))
+                await self._ws.send(
+                    serialize_to_msgpack({ENDPOINT_KEY: ENDPOINT_DONE, DONE_REASON_KEY: validated_done_reason})
+                )
                 await self._ws.recv()
         except websockets.ConnectionClosedError as exc:
             LOGGER.warning("Failed to mark episode done; connection closed: %s", exc)
