@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any, TypeAlias
+from typing import Any, TypeAlias, TypedDict
 
 import numpy as np
 import numpy.typing as npt
@@ -14,6 +14,9 @@ DEFAULT_INFERENCE_SERVER_PORT = 18090
 JOINT_STATE_KEY = "observation/state"
 OBSERVATION_HIDDEN_KEY = "observation/hidden"
 OBSERVATION_ENV_KEY = "observation/env"
+OBSERVATION_HISTORY_KEY = "observation/history"
+OBSERVATION_HISTORY_TIMESTAMPS_KEY = "timestamps_ns"
+OBSERVATION_HISTORY_VALUES_KEY = "values"
 # Optional hardware camera (stations may omit table-view).
 TABLE_VIEW_IMAGE_KEY = "observation/images/table_view_image"
 
@@ -64,7 +67,15 @@ Q_VALUE_KEY = "q_value"
 InferenceMetadataValue: TypeAlias = None | str | int | float | bool | list[Any] | dict[str, Any]
 ImageArray: TypeAlias = npt.NDArray[np.uint8]
 FloatArray: TypeAlias = npt.NDArray[np.float32]
-ProtocolValue: TypeAlias = ImageArray | FloatArray | bytes | InferenceMetadataValue
+
+
+class TimestampedObservationSequence(TypedDict):
+    timestamps_ns: list[int]
+    values: FloatArray | list[ImageArray | bytes]
+
+
+ObservationHistory: TypeAlias = dict[str, TimestampedObservationSequence]
+ProtocolValue: TypeAlias = ImageArray | FloatArray | bytes | InferenceMetadataValue | ObservationHistory
 ProtocolPayload: TypeAlias = dict[str, ProtocolValue]
 
 
@@ -195,6 +206,10 @@ __all__ = [
     "INFERENCE_TIME_KEY",
     "InferenceMetadataValue",
     "JOINT_STATE_KEY",
+    "OBSERVATION_HISTORY_KEY",
+    "OBSERVATION_HISTORY_TIMESTAMPS_KEY",
+    "OBSERVATION_HISTORY_VALUES_KEY",
+    "ObservationHistory",
     "OBSERVATION_ENV_KEY",
     "OBSERVATION_HIDDEN_KEY",
     "TABLE_VIEW_IMAGE_KEY",
@@ -215,6 +230,7 @@ __all__ = [
     "STATUS_KEY",
     "SUBTASK_KEY",
     "TASK_KEY",
+    "TimestampedObservationSequence",
     "ServerFeature",
     "ServerHandshake",
     "make_server_handshake",

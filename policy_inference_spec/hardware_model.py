@@ -22,6 +22,9 @@ from policy_inference_spec.protocol import (
     MODEL_ID_KEY,
     OBSERVATION_ENV_KEY,
     OBSERVATION_HIDDEN_KEY,
+    OBSERVATION_HISTORY_KEY,
+    OBSERVATION_HISTORY_TIMESTAMPS_KEY,
+    OBSERVATION_HISTORY_VALUES_KEY,
     POLICY_ID_KEY,
     PREV_SKIPPED_ACTION_START_KEY,
     PREFIX_CHANGE_START_KEY,
@@ -147,6 +150,7 @@ def _optional_wire_inference_request_keys() -> frozenset[str]:
             PREFIX_CHANGE_START_KEY,
             OBSERVATION_ENV_KEY,
             OBSERVATION_HIDDEN_KEY,
+            OBSERVATION_HISTORY_KEY,
             PREV_SKIPPED_ACTION_START_KEY,
             REWARD_KEY,
             DONE_KEY,
@@ -175,6 +179,62 @@ def _validate_inference_metadata_value(value: Any, *, key: str) -> None:
             _validate_inference_metadata_value(child_value, key=f"{key}.{child_key}")
         return
     raise AssertionError(f"{key} must contain JSON-like metadata, got {type(value)}")
+
+
+def validate_observation_history(
+    history: Any,
+    hardware_model: str | HardwareModel = DEFAULT_HARDWARE_MODEL,
+) -> None:
+    hm = HardwareModel(hardware_model)
+    assert isinstance(history, dict), f"{OBSERVATION_HISTORY_KEY} must be dict"
+    allowed_features = {JOINT_STATE_KEY, *_observation_keys(hm), TABLE_VIEW_IMAGE_KEY}
+    assert set(history) <= allowed_features, (
+        f"{OBSERVATION_HISTORY_KEY} contains unknown features {set(history) - allowed_features}"
+    )
+    for feature_key, sequence in history.items():
+        assert isinstance(sequence, dict), f"{OBSERVATION_HISTORY_KEY}[{feature_key!r}] must be dict"
+        assert set(sequence) == {OBSERVATION_HISTORY_TIMESTAMPS_KEY, OBSERVATION_HISTORY_VALUES_KEY}, (
+            f"{OBSERVATION_HISTORY_KEY}[{feature_key!r}] must contain timestamps and values"
+        )
+        timestamps_ns = sequence[OBSERVATION_HISTORY_TIMESTAMPS_KEY]
+        assert isinstance(timestamps_ns, list), (
+            f"{OBSERVATION_HISTORY_KEY}[{feature_key!r}].{OBSERVATION_HISTORY_TIMESTAMPS_KEY} must be list[int]"
+        )
+        assert timestamps_ns, f"{OBSERVATION_HISTORY_KEY}[{feature_key!r}] must not be empty"
+        assert all(isinstance(timestamp_ns, int) and timestamp_ns >= 0 for timestamp_ns in timestamps_ns), (
+            f"{OBSERVATION_HISTORY_KEY}[{feature_key!r}] timestamps must be non-negative integers"
+        )
+        assert all(left <= right for left, right in zip(timestamps_ns, timestamps_ns[1:])), (
+            f"{OBSERVATION_HISTORY_KEY}[{feature_key!r}] timestamps must be ordered"
+        )
+        values = sequence[OBSERVATION_HISTORY_VALUES_KEY]
+        if feature_key == JOINT_STATE_KEY:
+            assert isinstance(values, np.ndarray), (
+                f"{OBSERVATION_HISTORY_KEY}[{feature_key!r}].{OBSERVATION_HISTORY_VALUES_KEY} must be ndarray"
+            )
+            assert values.shape == (len(timestamps_ns), hm.state_dim), (
+                f"{OBSERVATION_HISTORY_KEY}[{feature_key!r}] values must have shape "
+                f"{(len(timestamps_ns), hm.state_dim)}, got {values.shape}"
+            )
+            assert np.issubdtype(values.dtype, np.floating), (
+                f"{OBSERVATION_HISTORY_KEY}[{feature_key!r}] values must be floating"
+            )
+            continue
+        assert isinstance(values, list), (
+            f"{OBSERVATION_HISTORY_KEY}[{feature_key!r}].{OBSERVATION_HISTORY_VALUES_KEY} must be a list"
+        )
+        assert len(values) == len(timestamps_ns), (
+            f"{OBSERVATION_HISTORY_KEY}[{feature_key!r}] timestamps and values lengths must match"
+        )
+        for value in values:
+            assert isinstance(value, (bytes, np.ndarray)), (
+                f"{OBSERVATION_HISTORY_KEY}[{feature_key!r}] images must be jpeg bytes or ndarray"
+            )
+            if isinstance(value, np.ndarray):
+                assert value.ndim == 3 and value.shape[-1] == 3 and value.dtype == np.uint8, (
+                    f"{OBSERVATION_HISTORY_KEY}[{feature_key!r}] images must be HWC uint8, got "
+                    f"shape={value.shape} dtype={value.dtype}"
+                )
 
 
 def server_handshake_for_hardware_model(
@@ -277,6 +337,8 @@ def validate_wire_inference_request_frame(
         assert isinstance(obs_env, np.ndarray), f"{OBSERVATION_ENV_KEY} must be ndarray"
         assert obs_env.ndim == 1, f"{OBSERVATION_ENV_KEY} must be 1-D, got {obs_env.shape}"
         assert np.issubdtype(obs_env.dtype, np.floating), f"{OBSERVATION_ENV_KEY} must be floating"
+    if OBSERVATION_HISTORY_KEY in frame:
+        validate_observation_history(frame[OBSERVATION_HISTORY_KEY], hardware_model)
     has_action_prefix = ACTION_PREFIX_KEY in frame
     has_prefix_change_start = PREFIX_CHANGE_START_KEY in frame
     assert has_action_prefix == has_prefix_change_start, (
@@ -371,6 +433,7 @@ __all__ = [
     "HardwareModel",
     "server_handshake_for_hardware_model",
     "validate_ultra_arrays_for_hardware_model",
+    "validate_observation_history",
     "validate_wire_inference_request_frame",
     "validate_wire_intervention_request_frame",
     "validate_wire_inference_response",
