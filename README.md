@@ -23,6 +23,32 @@ The base install now includes the dependencies needed by both module CLIs:
 
 ## Entrypoints
 
+### Client identity and warmup
+
+`RemotePolicyClient(predict_url, client_id="robot-1")` sends the same
+`x-ultra-client-id` header on WebSocket connections and HTTP warmup requests.
+If omitted, `client_id` is generated once for that client instance. IDs remain
+stable across `update_connection()` calls and must be non-empty without whitespace.
+Use a distinct ID for each independently cached client.
+
+Inside an async function:
+
+```python
+import time
+from policy_inference_spec.client import RemotePolicyClient
+
+async with RemotePolicyClient("ws://inference:18090/ws", client_id="robot-1") as client:
+    await client.warmup({
+        "revision": time.time_ns(),
+        "active_policy": {"policy_id": "policy-a"},
+        "next_up": {"policy_id": "policy-b"},
+    })
+```
+
+Warmup uses the configured authentication headers, maps `ws` to `http` and `wss`
+to `https`, and raises an HTTP error for unsuccessful responses. Acceptance means
+the server queued the configuration; it does not wait for compilation to finish.
+
 ### Python module CLIs
 
 `policy_inference_spec.smoke`

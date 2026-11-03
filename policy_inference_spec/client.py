@@ -4,9 +4,12 @@ import asyncio
 import logging
 import time
 import uuid
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
+import httpx
 import numpy as np
 import numpy.typing as npt
 import simplejpeg
@@ -28,6 +31,7 @@ from policy_inference_spec.hardware_model import (
 from policy_inference_spec.protocol import (
     ACTION_KEY,
     CHUNK_ID_KEY,
+    CLIENT_ID_HEADER,
     DONE_KEY,
     DONE_REASON_KEY,
     ENDPOINT_DONE,
@@ -94,9 +98,14 @@ class RemotePolicyClient:
         self,
         predict_url: str,
         *,
+        client_id: str | None = None,
         policy_auth_headers: dict[str, str] | None = None,
     ) -> None:
         self.predict_url = policy_ws_url(predict_url)
+        self.client_id = uuid.uuid4().hex if client_id is None else client_id
+        assert self.client_id and not any(character.isspace() for character in self.client_id), (
+            "client_id must be non-empty and contain no whitespace"
+        )
         self._policy_auth_headers = policy_auth_headers or {}
         self._lock = asyncio.Lock()
         self._ws: Any = None
@@ -126,7 +135,18 @@ class RemotePolicyClient:
         await self._close_ws()
 
     def _headers(self) -> list[tuple[str, str]]:
-        return [(k, v) for k, v in self._policy_auth_headers.items()]
+        assert all(key.lower() != CLIENT_ID_HEADER for key in self._policy_auth_headers), (
+            "pass client_id separately from policy_auth_headers"
+        )
+        return [(CLIENT_ID_HEADER, self.client_id), *self._policy_auth_headers.items()]
+
+    async def warmup(self, configuration: Mapping[str, Any]) -> None:
+        parsed = urlsplit(self.predict_url)
+        scheme = "https" if parsed.scheme == "wss" else "http"
+        url = urlunsplit((scheme, parsed.netloc, "/warmup", "", ""))
+        async with httpx.AsyncClient(headers=self._headers(), timeout=10.0) as client:
+            response = await client.post(url, json=dict(configuration))
+            response.raise_for_status()
 
     def _encode_wire_frame_images(self, wire_frame: dict[str, Any]) -> dict[str, Any]:
         adapted = dict(wire_frame)

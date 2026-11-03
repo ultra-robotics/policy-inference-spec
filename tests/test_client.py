@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 from typing import Any, cast
 
+import httpx
 import numpy as np
 import pytest
 import simplejpeg
@@ -25,6 +27,7 @@ from policy_inference_spec.codec import deserialize_from_msgpack, serialize_to_m
 from policy_inference_spec.protocol import (
     ACTION_KEY,
     ACTION_PREFIX_KEY,
+    CLIENT_ID_HEADER,
     CONDITIONING_METADATA_KEY,
     DONE_KEY,
     DONE_REASON_KEY,
@@ -103,6 +106,67 @@ def test_policy_ws_url_rejects_http() -> None:
 def test_default_predict_url_is_ws() -> None:
     assert DEFAULT_PREDICT_URL.startswith("ws://")
     assert DEFAULT_PREDICT_URL.endswith("/ws")
+
+
+@pytest.mark.asyncio
+async def test_client_id_is_shared_by_warmup_and_websocket_across_connection_updates() -> None:
+    requests: list[httpx.Request] = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(202, json={"status": "loading"})
+
+    async_client = httpx.AsyncClient
+
+    def make_http_client(**kwargs: Any) -> httpx.AsyncClient:
+        return async_client(transport=httpx.MockTransport(respond), **kwargs)
+
+    ws = MagicMock()
+    ws.recv = AsyncMock(return_value=serialize_to_msgpack(_server_handshake_payload()))
+    ws.close = AsyncMock()
+    configuration = {"revision": 1, "active_policy": {"policy_id": "policy-1"}}
+    client = RemotePolicyClient(
+        "ws://policy.test/predict?trace=1", client_id="robot-1", policy_auth_headers={"Authorization": "first"}
+    )
+    with (
+        patch("policy_inference_spec.client.httpx.AsyncClient", side_effect=make_http_client),
+        patch("policy_inference_spec.client.websockets.connect", new_callable=AsyncMock, return_value=ws) as connect,
+    ):
+        await client.warmup(configuration)
+        await client._ensure_ws()
+        await client.update_connection(predict_url="wss://other.test/ws", policy_auth_headers={"Authorization": "second"})
+        await client.warmup(configuration)
+        await client._ensure_ws()
+        await client.aclose()
+
+    assert [str(request.url) for request in requests] == ["http://policy.test/warmup", "https://other.test/warmup"]
+    assert [json.loads(request.content) for request in requests] == [configuration, configuration]
+    for request, connection, authorization in zip(requests, connect.await_args_list, ("first", "second"), strict=True):
+        headers = dict(connection.kwargs["additional_headers"])
+        assert request.headers[CLIENT_ID_HEADER] == headers[CLIENT_ID_HEADER] == "robot-1"
+        assert request.headers["Authorization"] == headers["Authorization"] == authorization
+
+
+@pytest.mark.asyncio
+async def test_warmup_reports_http_failure() -> None:
+    response = httpx.Response(503, request=httpx.Request("POST", "http://policy.test/warmup"))
+    with patch("policy_inference_spec.client.httpx.AsyncClient") as http_client:
+        http_client.return_value.__aenter__.return_value.post = AsyncMock(return_value=response)
+        with pytest.raises(httpx.HTTPStatusError):
+            await RemotePolicyClient("ws://policy.test/ws").warmup({"revision": 1})
+
+
+@pytest.mark.parametrize("client_id", ["", " ", "robot 1", "robot\n1"])
+def test_client_rejects_empty_or_whitespace_client_ids(client_id: str) -> None:
+    with pytest.raises(AssertionError, match="client_id"):
+        RemotePolicyClient("ws://policy.test/ws", client_id=client_id)
+
+
+def test_default_client_ids_distinguish_client_instances() -> None:
+    first = RemotePolicyClient("ws://policy.test/ws")
+    second = RemotePolicyClient("ws://policy.test/ws")
+    assert first.client_id and second.client_id
+    assert first.client_id != second.client_id
 
 
 @pytest.mark.asyncio

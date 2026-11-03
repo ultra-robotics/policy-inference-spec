@@ -9,6 +9,7 @@ import numpy as np
 import numpy.typing as npt
 
 DEFAULT_INFERENCE_SERVER_PORT = 18090
+CLIENT_ID_HEADER = "x-ultra-client-id"
 
 # Observation payload keys
 JOINT_STATE_KEY = "observation/state"
